@@ -12,10 +12,13 @@ M <- 3     #number of region
 pop <- rep(80000,M)#c(80000,80000,80000)     #population
 final_time <- 600     #total time
 seed_time <- 5          # time of days for initial seeding
-C <- matrix(c(0.91,0.05,0.04,0.05,0.83,0.12,0.10,0.05,0.85),nrow=3,ncol=3)
+C <- matrix(c(0.81,0.15,0.04,0.15,0.63,0.22,0.10,0.15,0.75),nrow=3,ncol=3)
 #C <-  matrix(c(1,0,0,0,1,0,0,0,1),nrow=3,ncol=3) #if there is no mobile population      
 
-Rt <- matrix(1.5,final_time,M)   #reproduction number  
+Rt <- matrix(1,final_time,M)   #reproduction number  
+Rt[,1] <- 1.5*Rt[,1]
+Rt[,2] <- 2*Rt[,2]
+Rt[,3] <- 0.9*Rt[,3]
 
 init_seed<- rep(3,M)      #initial seeding
 
@@ -54,7 +57,7 @@ options(mc.cores = parallel::detectCores())
 rstan_options(auto_write = FALSE)
 
 # Example in R using rstan
-m <- stan_model(file="~/OneDrive - National University of Singapore/Singapore/code1/my_model/spatial_trans.stan")
+m <- stan_model(file="~/OneDrive - National University of Singapore/Singapore/code1/my_model/Spatial_transmission/spatial_trans.stan")
 simulated_data = sampling(object=m,data=stan_data,
               iter=1,
               chains=1, thin=1,algorithm = "Fixed_param")
@@ -63,7 +66,12 @@ y_sim <- simulated_data %>%
   as.data.frame %>% 
   select(contains("infection"))
 
+total_infection <- sum(y_sim)
+print(total_infection)
+
 #y_mean <- apply(y_sim,2,mean)
-plot(1:final_time,y_sim[1:final_time],col="blue",type="l",lwd=2,xlab="time",ylab="infection",ylim=c(0,max(y_mean)))
-lines(1:final_time,y_sim[(final_time+1):(2*final_time)],lwd=2,col="red")
-lines(1:final_time,y_sim[(2*final_time+1):(3*final_time)],lwd=2,col="green")
+plot(1:final_time,y_sim[1,1:final_time],col="blue",type="l",lwd=2,xlab="time",ylab="infection",ylim=c(0,max(y_sim)))
+lines(1:final_time,y_sim[1,(final_time+1):(2*final_time)],lwd=2,col="red")
+lines(1:final_time,y_sim[1,(2*final_time+1):(3*final_time)],lwd=2,col="green")
+legend("topright", legend=Rt[1,],col=c("blue","red","green"),lty =1,xpd=TRUE, title = "Rt")
+
