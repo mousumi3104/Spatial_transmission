@@ -12,7 +12,7 @@ M <- 3     #number of region
 pop <- rep(80000,M)#c(80000,80000,80000)     #population
 final_time <- 600     #total time
 seed_time <- 5          # time of days for initial seeding
-C <- matrix(c(0.81,0.15,0.04,0.15,0.63,0.22,0.10,0.15,0.75),nrow=3,ncol=3)
+C <- matrix(c(0.81,0.05,0.14,0.05,0.83,0.12,0.20,0.25,0.55),nrow=3,ncol=3)
 #C <-  matrix(c(1,0,0,0,1,0,0,0,1),nrow=3,ncol=3) #if there is no mobile population      
 
 Rt <- matrix(1,final_time,M)   #reproduction number  
@@ -59,8 +59,7 @@ rstan_options(auto_write = FALSE)
 # Example in R using rstan
 m <- stan_model(file="~/OneDrive - National University of Singapore/Singapore/code1/my_model/Spatial_transmission/spatial_trans.stan")
 simulated_data = sampling(object=m,data=stan_data,
-              iter=1,
-              chains=1, thin=1,algorithm = "Fixed_param")
+              iter=1,chains=1, thin=1,algorithm = "Fixed_param")
   
 y_sim <- simulated_data %>% 
   as.data.frame %>% 
@@ -70,8 +69,17 @@ total_infection <- sum(y_sim)
 print(total_infection)
 
 #y_mean <- apply(y_sim,2,mean)
-plot(1:final_time,y_sim[1,1:final_time],col="blue",type="l",lwd=2,xlab="time",ylab="infection",ylim=c(0,max(y_sim)))
+plot(1:final_time,y_sim[1,1:final_time],col="blue",type="l",lwd=2,xlab="time",ylab="infection",ylim=c(0,900))
 lines(1:final_time,y_sim[1,(final_time+1):(2*final_time)],lwd=2,col="red")
 lines(1:final_time,y_sim[1,(2*final_time+1):(3*final_time)],lwd=2,col="green")
 legend("topright", legend=Rt[1,],col=c("blue","red","green"),lty =1,xpd=TRUE, title = "Rt")
 
+row <- c(350,420,490) 
+column <- c(490,420,350)
+
+# Add text annotations for matrix values
+for (i in 1:3) {
+  for (j in 1:3) {
+    text(row[j], column[i], labels = C[i, j], cex = 1.5)  # Place matrix values at coordinates (i, j)
+  }
+}
