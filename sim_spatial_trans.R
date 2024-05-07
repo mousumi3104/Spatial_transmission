@@ -9,16 +9,21 @@ library(dplyr)
 library(EnvStats)
 
 M <- 3     #number of region
-pop <- rep(80000,M)#c(80000,80000,80000)     #population
-final_time <- 600     #total time
+pop <- rep(80000,M)     #c(80000,60000,30000)    # #population
+final_time <- 400     #total time
 seed_time <- 5          # time of days for initial seeding
-C <- matrix(c(0.81,0.05,0.14,0.05,0.83,0.12,0.20,0.25,0.55),nrow=3,ncol=3)
+C <- matrix(c(0.81,0.05,0.14,0.05,0.83,0.12,0.60,0.25,0.15),nrow=3,ncol=3)
+mobility <- 1      # 0 for no mobility
+mobility_reduced <- array(mobility,dim=c(3,3))
+C <- C * mobility_reduced
+diag(C) <- 1-mobility+diag(C)
 #C <-  matrix(c(1,0,0,0,1,0,0,0,1),nrow=3,ncol=3) #if there is no mobile population      
 
 Rt <- matrix(1,final_time,M)   #reproduction number  
+
 Rt[,1] <- 1.5*Rt[,1]
-Rt[,2] <- 2*Rt[,2]
-Rt[,3] <- 0.9*Rt[,3]
+Rt[,2] <- 1.5*Rt[,2]
+Rt[,3] <- 1.5*Rt[,3]
 
 init_seed<- rep(3,M)      #initial seeding
 
@@ -57,7 +62,7 @@ options(mc.cores = parallel::detectCores())
 rstan_options(auto_write = FALSE)
 
 # Example in R using rstan
-m <- stan_model(file="~/OneDrive - National University of Singapore/Singapore/code1/my_model/Spatial_transmission/spatial_trans.stan")
+m <- stan_model(file="~/OneDrive - National University of Singapore/Singapore/code1/my_model/Spatial_transmission/sim_spatial_trans.stan")
 simulated_data = sampling(object=m,data=stan_data,
               iter=1,chains=1, thin=1,algorithm = "Fixed_param")
   
@@ -68,18 +73,24 @@ y_sim <- simulated_data %>%
 total_infection <- sum(y_sim)
 print(total_infection)
 
+print(sprintf("population :%d, total_infection region 1 : %f", pop[1], sum(y_sim[1:400])))
+print(sprintf("population :%d, total_infection region 1 : %f", pop[2], sum(y_sim[401:800])))
+print(sprintf("population :%d, total_infection region 1 : %f", pop[3], sum(y_sim[801:1200])))
+
 #y_mean <- apply(y_sim,2,mean)
-plot(1:final_time,y_sim[1,1:final_time],col="blue",type="l",lwd=2,xlab="time",ylab="infection",ylim=c(0,900))
+plot(1:final_time,y_sim[1,1:final_time],col="blue",type="l",lwd=2,
+     xlab="time",ylab="infection",ylim=c(0,900),main=paste("mobility=", mobility*100,"%"))
+
 lines(1:final_time,y_sim[1,(final_time+1):(2*final_time)],lwd=2,col="red")
 lines(1:final_time,y_sim[1,(2*final_time+1):(3*final_time)],lwd=2,col="green")
 legend("topright", legend=Rt[1,],col=c("blue","red","green"),lty =1,xpd=TRUE, title = "Rt")
 
-row <- c(350,420,490) 
-column <- c(490,420,350)
+#row <- c(350,420,490) 
+#column <- c(490,420,350)
 
 # Add text annotations for matrix values
-for (i in 1:3) {
-  for (j in 1:3) {
-    text(row[j], column[i], labels = C[i, j], cex = 1.5)  # Place matrix values at coordinates (i, j)
-  }
-}
+#for (i in 1:3) {
+#  for (j in 1:3) {
+#    text(row[j], column[i], labels = C[i, j], cex = 1.5)  # Place matrix values at coordinates (i, j)
+#  }
+#}

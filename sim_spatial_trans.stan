@@ -1,6 +1,6 @@
 data {
   int<lower =1> M;  //number of regions
-  int pop[M];             //population of three regions
+  vector[M] pop;             //population of three regions
   int<lower = 1> final_time;        // total time point to run the simulation
   int<lower = 0> seed_time;       //initial seeding time
   matrix[M,M] C;              //initialize the susceptible population
@@ -32,9 +32,11 @@ generated quantities{
     matrix[final_time,M] SI_rep = rep_matrix(SI_rev,M);      // infections at region "k"
     row_vector[M] convolution = columns_dot_product(infection[1:t-1,:] , SI_rep[final_time-t+2:final_time,:]);  //infections at each region "k"
     vector[M] total_inf =  C * convolution';     //total infection at region "j" 
-  
+    vector[M] eff_pop = C * pop;
+    
     for (i in 1:M){                   // for loop over region "i" (final infection at region "i")
-      infection[t,i] = dot_product(C[1:M,i]', (((1-(sum(infection[1:(t-1),i])/ pop[i])) * Rt[t,1:M]) .* total_inf'));
+      real sus = pop[i]-sum(infection[1:(t-1),i]);
+      infection[t,i] = dot_product(C[1:M,i]', (((rep_vector(sus , M) ./ eff_pop)' .* Rt[t,1:M]) .* total_inf'));
       //cumm_sum[t,i] = cumm_sum[t-1,i] + infection[t-1,i];
     }
   }
