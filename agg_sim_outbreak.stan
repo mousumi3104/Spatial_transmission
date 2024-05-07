@@ -38,15 +38,22 @@ generated quantities{
   for (s in 1:n_simulation){
     row_vector[ M_res ] Rt_res_data1; 
     row_vector[ M_poi ] Rt_poi_data1;
-  
-
+    
+  for (j in 1:M_res){
+        Rt_res_data1[j] = normal_rng(Rt_res[j],0.2); 
+      }
+      for (j in 1:M_poi){
+        Rt_poi_data1[j] = normal_rng(Rt_poi[j],0.2); 
+      }
+      matrix[final_time, M_res+M_poi] Rt = append_col(rep_matrix(Rt_res_data1,final_time),rep_matrix(Rt_poi_data1,final_time));  
+    
     for (i in 1:M_res){                  // for initial seeding
       infection[1:seed_time,i] = rep_vector(init_seed[i],seed_time);      // learn the number of cases in the first initial seeding days
       cumm_sum[2:seed_time,i] = cumulative_sum(infection[2:seed_time,i]);    // cumulative infection
     }
     matrix[final_time,M_res] SI_res = rep_matrix(SI_rev,M_res); 
  
-//////////////////////////////////////////////////////////////////////////////////////         
+/////////////////// for inter area mobility (connection matrix is the identity matrix) ///////////////////////////////////////         
     if (sum(C[(M_res+1):(M_res+M_poi)]) == 0){ 
     
     // infection only at residential place (in case of no movement)
@@ -57,14 +64,6 @@ generated quantities{
     
       vector[M_res + M_poi] total_inf = C * convolution_res';     //total infection at residential region "j" 
       vector[M_res + M_poi] eff_pop = C * pop;
-    
-      for (j in 1:M_res){
-        Rt_res_data1[j] = normal_rng(Rt_res[j],0.2); 
-      }
-      for (j in 1:M_poi){
-        Rt_poi_data1[j] = normal_rng(Rt_poi[j],0.2); 
-      }
-      matrix[final_time, M_res+M_poi] Rt = append_col(rep_matrix(Rt_res_data1,final_time),rep_matrix(Rt_poi_data1,final_time));
   
       for (i in 1:M_res){      // for loop over region "i" (final infection at region "i")   
         real sus = pop[i]-sum(infection[1:(t-1),i]);
@@ -85,14 +84,6 @@ generated quantities{
     vector[M_res + M_poi] eff_pop = C * pop;
     
     
-    for (j in 1:M_res){
-      Rt_res_data1[j] = normal_rng(Rt_res[j],0.2); 
-    }
-    for (j in 1:M_poi){
-      Rt_poi_data1[j] = normal_rng(Rt_poi[j],0.2); 
-    }
-    matrix[final_time, M_res+M_poi] Rt = append_col(rep_matrix(Rt_res_data1,final_time),rep_matrix(Rt_poi_data1,final_time));
-  
     for (i in 1:M_res){      // for loop over region "i" (final infection at region "i")   
       real sus = pop[i]-sum(infection[1:(t-1),i]);
       infection[t,i] = dot_product(C[:,i]', (((rep_vector(sus , (M_res + M_poi)) ./ eff_pop)' .* Rt[t,:]).* total_inf'));
