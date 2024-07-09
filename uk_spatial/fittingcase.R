@@ -12,14 +12,18 @@ library(scales)
 library(bayesplot)
 library(ggplot2)
 library(rstanarm)
+library(this.path)
+
+script_directory <- this.path::this.dir()
+setwd(script_directory)
 
 #load("~/OneDrive - National University of Singapore/Uk_mobility_data/data/population/final_pop_2020_ltla.Rdata")
 #load("~/OneDrive - National University of Singapore/uk_mobility_data/data/deaths/england_death_2020.Rdata")       ## weekly data
 #load("~/OneDrive - National University of Singapore/Uk_mobility_data/data/mobility/uk_ltla_mobility_matrix.Rdata")
 
-load("final_pop_2020_ltla.Rdata")
-load("england_death_2020.Rdata")
-load("uk_ltla_mobility_matrix.Rdata")
+load("data/final_pop_2020_ltla.Rdata")
+load("data/england_death_2020.Rdata")
+load("data/uk_ltla_mobility_matrix.Rdata")
 
 death_data <- death_data %>% select(all_of(pop_2020$area_name))       
 observed_data_week <- death_data[,1:2]     # considering two regions
