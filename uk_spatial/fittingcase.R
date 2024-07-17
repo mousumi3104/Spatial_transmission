@@ -11,34 +11,32 @@ library(abind)
 library(scales)
 library(bayesplot)
 library(ggplot2)
-library(rstanarm)
+#library(rstanarm)
 library(this.path)
-
+# 
 script_directory <- this.path::this.dir()
 setwd(script_directory)
 
-#load("~/OneDrive - National University of Singapore/Uk_mobility_data/data/population/final_pop_2020_ltla.Rdata")
-#load("~/OneDrive - National University of Singapore/uk_mobility_data/data/deaths/england_death_2020.Rdata")       ## weekly data
-#load("~/OneDrive - National University of Singapore/Uk_mobility_data/data/mobility/uk_ltla_mobility_matrix.Rdata")
-
 load("data/final_pop_2020_ltla.Rdata")
-load("data/england_death_2020.Rdata")
+load("data/england_death_2020.Rdata")       ## weekly data
 load("data/uk_ltla_mobility_matrix.Rdata")
 
-death_data <- death_data %>% select(all_of(pop_2020$area_name))       
-observed_data_week <- death_data[,1:2]     # considering two regions
-week <- seq(nrow(observed_data_week))
+# load("~/mousumi_codes/uk_spatial/data/final_pop_2020_ltla.Rdata")
+# load("~/mousumi_codes/uk_spatial/data/england_death_2020.Rdata")
+# load("~/mousumi_codes/uk_spatial/data/uk_ltla_mobility_matrix.Rdata")
 
-M_regions <-ncol(observed_data_week)     # number of region
+death_data <- death_data %>% select(all_of(pop_2020$area_name))  
+death_data <- death_data[,1:2]
+week <- nrow(death_data)
 
-C <- as.matrix(mob_matrix_norm[1:2,1:2])    # mobility matrix for two regions
-
-C[1,2] <- 1-C[2,2]
-C[2,1] <- 1-C[1,1]
+M_regions <-2#ncol(death_data)     # number of region
+C <- mob_matrix_norm[1:2,1:2]    # mobility matrix for two regions
+C[1,1] <- 1-C[2,1]
+C[2,2] <- 1-C[1,2]
 
 # C <- diag(M_regions)
 
-final_time = 7*length(week)
+final_time = 7*week
 initial_seeding_day = 1
 initial_seeding = rep(5,M_regions)
 pop = pop_2020$population[1:2]
@@ -62,30 +60,40 @@ f[1] = (convolution(1.5) - convolution(0))
 for(i in 2:final_time) {
   f[i] = (convolution(i+.5) - convolution(i-.5)) 
 }
- 
+
+week_index <- array(0,(final_time-1))
+for (t in 1:final_time){
+  week_index[t] = floor(t/7)+1      
+}
+week_index <- c(1,week_index[1:(final_time-1)])
+
 stan_data <- list(M_regions= M_regions,
                   final_time=final_time,
+                  W = week,
                   initial_seeding_day=initial_seeding_day,
                   initial_seeding=initial_seeding,
-                  death=observed_data_week,
+                  death=death_data,
                   SI=si,
                   f=f,
-                  pop=pop,C=C)
+                  pop=pop,C=C,
+                  week_index=week_index,
+                  ifr = 0.010350686).     # this is the ifr for uk from the code of swapnil's nature npi
 
 options(mc.cores = parallel::detectCores())
 rstan_options(auto_write = TRUE)
 
 # Example in R using rstan
-m <- rstan::stan_model(file="~/OneDrive - National University of Singapore/Singapore/code1/fittingcase_zro_inf.stan")
+m <- rstan::stan_model(file="fittingcase_zro_inf.stan")
 fit = rstan::sampling(
   object=m,
   data=stan_data,
-  iter=200, 
-  warmup=150, 
-  chains=4,
+  iter=500, 
+  warmup=300, 
+  chains=2,
   thin=1, 
+  seed=12345,
   control = list(adapt_delta = 0.99, max_treedepth = 15))     # adapt_delta controls acceptance probability (lower -> larger step size, higher acceptance rate, less time, less explored posterior distribution
-                                                              # opposite for the higher adapt_delta)
+# opposite for the higher adapt_delta)
 out <- rstan::extract(fit)
 param_names <- names(out)
 summary_fit <- summary(fit)
@@ -131,5 +139,5 @@ lines(mean_deaths1)
 #   xlab("time (week)" )+
 #   ylab("death_data")
 
-  
+
 par(mfrow = c(1, 1) )
