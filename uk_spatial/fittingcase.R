@@ -38,7 +38,7 @@ C[2,2] <- 1-C[1,2]
 
 final_time = 7*week
 initial_seeding_day = 1
-initial_seeding = rep(5,M_regions)
+# initial_seeding = rep(5,M_regions)
 pop = pop_2020$population[1:2]
 
 si <- rep(0,final_time)
@@ -71,13 +71,13 @@ stan_data <- list(M_regions= M_regions,
                   final_time=final_time,
                   W = week,
                   initial_seeding_day=initial_seeding_day,
-                  initial_seeding=initial_seeding,
+                  # initial_seeding=initial_seeding,
                   death=death_data,
                   SI=si,
                   f=f,
                   pop=pop,C=C,
                   week_index=week_index,
-                  ifr = 0.010350686).     # this is the ifr for uk from the code of swapnil's nature npi
+                  ifr = 0.010350686)     # this is the ifr for uk from the code of swapnil's nature npi
 
 options(mc.cores = parallel::detectCores())
 rstan_options(auto_write = TRUE)
@@ -87,12 +87,12 @@ m <- rstan::stan_model(file="fittingcase_zro_inf.stan")
 fit = rstan::sampling(
   object=m,
   data=stan_data,
-  iter=500, 
-  warmup=300, 
+  iter=1000, 
+  warmup=500, 
   chains=2,
   thin=1, 
   seed=12345,
-  control = list(adapt_delta = 0.99, max_treedepth = 15))     # adapt_delta controls acceptance probability (lower -> larger step size, higher acceptance rate, less time, less explored posterior distribution
+  control = list(adapt_delta = 0.80, max_treedepth = 10))     # adapt_delta controls acceptance probability (lower -> larger step size, higher acceptance rate, less time, less explored posterior distribution
 # opposite for the higher adapt_delta)
 out <- rstan::extract(fit)
 param_names <- names(out)
@@ -102,12 +102,12 @@ ess_bulk <- summary_fit$summary[,"n_eff"]
 
 ###############################################################################################################
 
-par(mfrow = c(2, 1), mai=c(0.4,0.8,0.05,0.3))
+par(mfrow = c(2, 1), mai=c(0.8,1,0.2,0.3))
 ##.  plotting rt.  ###############################################
-rt_samples <- out[["rt"]]
-mean_rt <- apply(rt_samples,2,mean)
-ci_rt <- apply(rt_samples,2,quantile,c(0.025,0.975))
-plot(seq(length(mean_rt)),mean_rt,type='l',col='red',xaxt="n",ylab="Rt")
+rt_samples <- out$Rt
+mean_rt <- apply(rt_samples[,,1],2,mean)
+ci_rt <- apply(rt_samples,2,quantile,c(0.25,0.75))
+plot(seq(length(mean_rt)),mean_rt,type='l',col='red',xlab="",ylab="Rt")
 grid(nx = 5, ny =NA ,lty = 2,col = "gray",lwd = 2) 
 polygon(c(1:length(mean_rt), rev(1:length(mean_rt))),
         c(ci_rt[1, ], rev(ci_rt[2, ])),
@@ -118,17 +118,15 @@ abline(a=1,b=0,h=1)
 #######.  plotting cases.... the model fitting data ####################################
 death_samples <- out$weekly_deaths
 mean_deaths1 <- apply(death_samples[,,1],2,mean)
-mean_deaths2 <- apply(death_samples[,,2],2,mean)
-plot(observed_data_week$Hartlepool)
-lines(mean_deaths1)
+plot(death_data$Hartlepool,xlab="Time(week)",ylab=paste("Weekly deaths","\n", colnames(death_data)[1]))
+lines(mean_deaths1,col="red")
+ci_deaths <- apply(death_samples,2,quantile,c(0.05,0.95))
+grid(nx = 5, ny = NA,lty = 2,col = "gray",lwd = 2) 
+polygon(c(1:length(mean_deaths1), rev(1:length(mean_deaths1))),
+         c(ci_deaths[1, ], rev(ci_deaths[2, ])),
+         col = rgb(1, 0, 0, 0.1), border = NA)
 
 
-# ci_cases <- apply(cases_samples,2,quantile,c(0.025,0.975))
-# plot(seq(length(mean_cases)),mean_cases,type='l',col='red',ylab="Cases")
-# grid(nx = 5, ny = NA,lty = 2,col = "gray",lwd = 2) 
-# polygon(c(1:length(mean_cases), rev(1:length(mean_cases))),
-#         c(ci_cases[1, ], rev(ci_cases[2, ])),
-#         col = rgb(1, 0, 0, 0.1), border = NA)
 # points(week,incidence_data_week)
 
 ##########################################################
