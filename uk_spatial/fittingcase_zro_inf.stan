@@ -9,19 +9,24 @@ data {
   vector[final_time] f;
   vector[M_regions] pop;
   matrix[M_regions,M_regions] C;
-  array[final_time] int<lower=0> week_index;
-  real<lower=0> ifr;
+  array[final_time] int<lower=0> week_index;     
+  // real<lower=0> ifr;
 }
 
 transformed data {
   vector[final_time] SI_rev; // SI in reverse order
   vector[final_time] f_rev; // f in reversed order
+  // vector[M_regions] weekly_var; 
+  // for (i in 1:M_regions){
+  //   weekly_var[i] = normal_rng(0,0.2);
+  // }
   for(i in 1:final_time){
     SI_rev[i] = SI[final_time-i+1];
   }
   for(i in 1:final_time) {
      f_rev[i] = f[final_time-i+1];
     }
+  
 }
 
 parameters {
@@ -29,10 +34,10 @@ parameters {
   array[M_regions] real <lower=0> initial_seeding;
   real<lower=0> tau;
   real<lower=0> kappa;
-  real weekly_var;       //weekly variance
+  real<lower=0> weekly_var;       //weekly variance
   matrix[W, M_regions] weekly_effect_d;     //parameters for Rt (why W+1).     ?????
   real<lower=0> phi2;
-  //real<lower=0,upper =1> ifr;  
+  array[M_regions] real<lower=0> ifr_noise;  
 }
 
 transformed parameters{
@@ -44,14 +49,17 @@ transformed parameters{
   
   //////////////////////////////////////////
   {
+     //
   matrix[final_time, M_regions] SI_regions = rep_matrix(SI_rev,M_regions);  // serial interval for every region
   matrix[final_time, M_regions] f_regions = rep_matrix(f_rev,M_regions);    // infection to death distribution for every region
   
   
     for (m in 1:M_regions){                  // for initial seeding
+      
       infection[1:initial_seeding_day,m] = rep_vector(initial_seeding[m],initial_seeding_day);      // learn the number of cases in the first initial seeding days
-      weekly_effect[:, m] = weekly_var * weekly_effect_d[:, m] ;    // weekly effect
-      Rt[:,m] = mu[m] * 2 * inv_logit(- weekly_effect[week_index,m]);   // why this is weekly_effect[m]??
+      weekly_effect[:, m] = weekly_var * cumulative_sum(weekly_effect_d[:, m]) ;    // weekly effect
+      
+      Rt[:,m] = mu[m] * 2 * inv_logit(- weekly_effect[week_index,m]);   
     }
   
   for (t in (initial_seeding_day+1):final_time){ //for loop over time
@@ -62,6 +70,8 @@ transformed parameters{
     
     for (m in 1:M_regions){      // for loop over region "i" (final infection at region "i")   
     
+      //real convolution = dot_product(sub_col(prediction, 1, m, i-1), tail(SI_rev, i-1));
+      
       real sus = pop[m]-sum(infection[1:(t-1),m]);
       infection[t,m] = dot_product(C[:,m]', (((rep_vector(sus , M_regions) ./ eff_pop)'.* Rt[t,:]).* total_inf'));
     }
@@ -69,11 +79,14 @@ transformed parameters{
   
   daily_deaths[1,:] = 1e-15 * infection[1,:];
   for (t in 2:final_time){
-    daily_deaths[t,:] = ifr * columns_dot_product(infection[1:(t-1),:], f_regions[(final_time-t+2):final_time,:]); 
-  }
-  for (t in 1:(final_time/7)) { //weekly_deaths
     for (m in 1:M_regions){
-        weekly_deaths[t,m] = sum(daily_deaths[(7*(t-1)+1):7*t,m]);
+    daily_deaths[t,m] = ifr_noise[m] * dot_product(infection[1:(t-1),m], f_regions[(final_time-t+2):final_time,m]); 
+    }
+  }
+  int week = 7;
+  for (t in 1:(final_time/week)) { //weekly_deaths
+    for (m in 1:M_regions){
+        weekly_deaths[t,m] = sum(daily_deaths[(week*(t-1)+1):week*t,m]);
     }
   }
   }
@@ -82,14 +95,14 @@ transformed parameters{
 model {
  phi2 ~ normal(0,5);
  tau ~ exponential(0.03);
- 
  for (m in 1:M_regions){
     initial_seeding[m] ~ exponential(1/tau);
+    ifr_noise[m] ~ normal(1,0.1);
  }
- //ifr ~ normal(0.0103,0.1);
-
- mu ~ normal(3.28,kappa);
+ 
+ // ifr ~ normal(0.0103,0.1);
  kappa ~ normal(0,0.5);
+ mu ~ normal(3.28,kappa);
  
  weekly_var ~ normal(0,.2);
  to_vector(weekly_effect_d[1:W, ]) ~ normal(0, 1);      
