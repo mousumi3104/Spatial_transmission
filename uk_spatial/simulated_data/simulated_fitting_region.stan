@@ -13,6 +13,7 @@ data {
   vector[final_time] f2;
   vector[M_regions] pop;
   int fitting_start;
+  int prediction_horizon;
 }
 
 transformed data {
@@ -29,6 +30,7 @@ transformed data {
     for(t in 1:final_time) {
      f2_rev[t] = f2[final_time-t+1];       // infection to death
     }
+    int N = final_time + prediction_horizon;
 }
 
 parameters {
@@ -67,7 +69,7 @@ transformed parameters{
       // Rt[1:initial_seeding_day,m] =  rep_vector(mu[m] .* 2 * inv_logit(- weekly_effect[1,m]),initial_seeding_day);   // why this is weekly_effect[m]??
     }
     
-  for (t in (initial_seeding_day+1):final_time){ //for loop over time
+  for (t in (initial_seeding_day+1):N){ //for loop over time
   
     row_vector[M_regions] convolution_inf = columns_dot_product(infection[1:(t-1),:] , SI_regions[(final_time-t+2):final_time,:]);  //infections at each region "k"
     vector[M_regions] total_inf = C * convolution_inf';     //total infection at region "j"
@@ -103,15 +105,6 @@ transformed parameters{
 
 model {
  phi1 ~ normal(0,5);
- // tau ~ exponential(0.03);
- // initial_seeding ~ exponential(1/tau);
-
- // mu ~ normal(3.28,1);
- // ifr_noise ~ normal(1,0.1);
- // iar_noise ~ normal(1,0.1);
- // weekly_var ~ normal(0,0.2);
- // 
- // weekly_effect_d[1,M_regions] ~ normal(0,1);
  
  for (m in 1:M_regions){
    for (i in 1:initial_seeding_day){
@@ -127,4 +120,15 @@ model {
     target +=  neg_binomial_2_lpmf(data_inf[t, m]| infection[t, m], phi1);
    }
  }
+}
+
+generated quantities{
+  matrix[prediction_horizon, M_regions] infection_forcast = rep_matrix(0, prediction_horizon, M_regions);    // daily initialization
+  if (forecast_horizon >0){
+    for (tt in 1:forcast_horizon){
+      for (mm in 1:M_regions){
+        infection_forecast = poisson_rng(infection[final_time+tt,mm]);
+      }
+    } 
+  }
 }
