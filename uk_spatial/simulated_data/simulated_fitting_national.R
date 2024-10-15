@@ -19,61 +19,77 @@ setwd(script_directory)
 
 #--------- data arrangement ------------------------------------------------------------------
 week <- 7
-final_time <- 70*week
-pop = 20000000
+final_time <- 50 * week
+pop <- c(20000000, 10000000, 15000000)
 initial_seeding_day = 6
 
 a <- read.csv("~/OneDrive - National University of Singapore/uk_mobility_data/GBR-estimates.csv")
-Rt <- data.frame(date = as.Date(a$date), Rt = a$median_R_mean)
-Rt <- Rt %>% filter(date >= as.Date("2020-01-01") & date <= as.Date("2021-12-01")) %>% distinct(date, .keep_all = TRUE)         # choose only the first option
-Rt <- Rt$Rt[1:final_time]
+Rt_1 <- data.frame(date = as.Date(a$date), Rt = a$median_R_mean)
+Rt_1 <- Rt_1 %>% arrange(date)
+Rt_1 <- Rt_1 %>% filter(date >= as.Date("2020-03-01") & date <= as.Date("2022-01-01")) %>% distinct(date, .keep_all = TRUE) 
+# choose only the first option
+Rt_1 <- Rt_1 %>% group_by(date) %>% slice_min(row_number())
 
+a <- read.csv("~/OneDrive - National University of Singapore/uk_mobility_data/IND-estimates.csv")
+Rt_2 <- data.frame(date = as.Date(a$date), Rt = a$median_R_mean)
+Rt_2 <- Rt_2 %>% arrange(date)
+Rt_2 <- Rt_2 %>% filter(date >= as.Date("2020-03-01") & date <= as.Date("2022-01-01")) %>% distinct(date, .keep_all = TRUE)
+Rt_2 <- Rt_2 %>% group_by(date) %>% slice_min(row_number())
+
+a <- read.csv("~/OneDrive - National University of Singapore/uk_mobility_data/ITA-estimates.csv")
+Rt_3 <- data.frame(date = as.Date(a$date), Rt = a$median_R_mean)
+Rt_3 <- Rt_3 %>% arrange(date)
+Rt_3 <- Rt_3 %>% filter(date >= as.Date("2020-03-01") & date <= as.Date("2022-01-01")) %>% distinct(date, .keep_all = TRUE)
+Rt_3 <- Rt_3 %>% group_by(date) %>% slice_min(row_number())
+
+Rt <- cbind(Rt_1 = 0.1 + Rt_1$Rt,Rt_2 = Rt_2$Rt ,Rt_3=Rt_3$Rt)
+Rt <- data.frame(Rt[1:N,])
 
 # day_week_index <- c(rep(1,(fitting_case_start -1)*7), rep(2:((final_time/7)),each=7))
 # day_week_index <- day_week_index[1:final_time]
 # week <- day_week_index[length(day_week_index)]  
 
 #-----------distributions ----------------------------------------------------------------------
-
-si <- rep(0,final_time)
+si <- rep(0,N)
 si[1] = integrate(function(x) dgamma(x,shape=6.5, rate=0.62), lower=0, upper=1.5)$value
-for (i in 2:final_time){
+for (i in 2:N){
   si[i] <- integrate(function(x) dgamma(x,shape=6.5, rate=0.62), lower=i-0.5, upper=i+0.5)$value
 }
 
-mean1 <- 5.1; cv1 <- 0.86; mean2 <-17.8 ; cv2 <- 0.45;
-x1 <- rgammaAlt(1e6,mean1,cv1)
-x2 <- rgammaAlt(1e6,mean2,cv2)
-f1 <- rep(0,final_time)
-f2 <- rep(0,final_time)
+mean1 <- 5.1; cv1 <- 0.86; mean2 <- 17.8 ; cv2 <- 0.45;
+x1 <- rgammaAlt(1e6, mean1, cv1)
+x2 <- rgammaAlt(1e6, mean2, cv2)
 
-f1_cached <- ecdf(x1+x2) # infection to death    
-f2_cached <- ecdf(x1) # infection to onset
-ifr <- 0.0103
-iar <- 1       #(0.8 high reporting rate, 0.3 low reporting rate)
+f1 <- rep(0, N)
+f1_cached <- ecdf(x1 + x2)
+ifr <- 1
+iar <- 1
 
-convolution1 <- function(u) (0.08*f1_cached(u))
-f1[1] = (convolution1(1.5) - convolution1(0))
-for(i in 2:final_time) {
-  f1[i] = (convolution1(i+.5) - convolution1(i-.5)) 
+convolution <- function(u) (ifr * f1_cached(u))
+f1[1] <- (convolution(1.5) - convolution(0))
+for (i in 2:N) {
+  f1[i] <- (convolution(i + .5) - convolution(i - .5))
 }
-convolution2 <- function(u) ( f2_cached(u))
-f2[1] = (convolution2(1.5) - convolution1(0))
-for(i in 2:final_time) {
-  f2[i] = (convolution2(i+.5) - convolution2(i-.5)) 
+
+f2 <- rep(0, N)
+f2_cached <- ecdf(x1)
+convolution <- function(u) (f2_cached(u))
+f2[1] <- (convolution(1.5) - convolution(0))
+for(i in 2:N) {
+  f2[i] <- (convolution(i + .5) - convolution(i - .5))
 }
 
 
 #---- Run the model ----------------------------------------------------------------------------------
-
-stan_data_single_region <- list(pop=pop,
+for (i in 1:M_regions){
+stan_data_single_region <- list(pop=pop[i],
                                 final_time = final_time,
                                 initial_seeding_day = initial_seeding_day,
                                 init_seed = 30,
                                 SI=si,
                                 f1=f1,
                                 f2=f2,
-                                Rt=Rt,
+                                Rt=Rt[,i],
                                 iar=iar)
 
 m_single_region <- cmdstan_model("simulated_data_single_region.stan")
@@ -89,6 +105,10 @@ daily_infection <- fit$draws("infection",format = "matrix")
 daily_deaths <- fit$draws("daily_deaths", format = "matrix")
 daily_cases <- fit$draws("daily_cases", format = "matrix")
 weekly_death <- fit$draws("weekly_deaths",format= "matrix")
+
+plot(colMeans(daily_infection))
+save(daily_infection, file = paste0("infection",i,".rds"))
+}
 
 #----- fitting with the model ------------------------------------------------------------------------------------------------
 

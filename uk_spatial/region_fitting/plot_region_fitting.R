@@ -1,3 +1,5 @@
+# this is the plot for estimated rt based on england COVID dataset
+
 library(data.table)
 library(lubridate)
 library(gdata)
@@ -21,216 +23,300 @@ setwd(script_directory)
 
 #----------------------------------- data ------------------------------------------------------------------------------------
 #---------------------------------------------------------------------------------------------------------------------
-load("results/region_fitting.Rdata")
-out <- rstan::extract(fit)
-death_regions <- stan_data$death
+load("results/double_mobility/region_connected_rt_double_mob_xyz.Rdata")
+# load("results/region_disconnected_rt_wo_gmob.Rdata")
+# load("results/region_connected_rt_xyz.Rdata")
 
-#----------------------------------- plot function -----------------------------------------------------------------------------------
-#-----------------------------------------------------------------------------------------------------------------------
-make_plots <- function(i,data_estimated_rt, data_estimated_death,region){
+inf_start_date <- as.Date("27-01-2020",format = "%d-%m-%Y")
+fitting_start <- as.Date("09-03-2020", format = "%d-%m-%Y")
+end_date <- as.Date("31-12-2020", format = "%d-%m-%Y")
+final_time <- stan_data_connected$final_time
+first_lockdown_start <- as.Date("2020-03-23", format = "%Y-%m-%d")
+first_lockdown_end <- as.Date("2020-05-10", format = "%Y-%m-%d")
+
+second_lockdown_start <- as.Date("2020-11-05", format = "%Y-%m-%d")  
+second_lockdown_end <- as.Date("2020-12-02", format = "%Y-%m-%d") 
+Rt <- fit_connected$draws("Rt",format = "matrix")
+load("data/final_pop_2020_ltla.Rdata")
+
+M_regions <- stan_data_connected$M_regions
+final_time <- stan_data_connected$final_time
+death_regions <- data.frame(stan_data_connected$death)
+death_data_length <- stan_data_connected$death_data_length
+death_regions$time <- seq(from=inf_start_date ,to =  end_date, by = "week")
+# death_regions <- death_regions %>%
+#   filter(time >= fitting_start)
+
+regions <- c("North East","North West","Yorkshire and the Humber","East Midlands","West Midlands","East","London","South East","South West")
+
+#---------- disconnected model ------------------------------------------------------------------------------------
+for (i in 1:M_regions){
   
-  data_Rt_95 <- data.frame(time = data_estimated_rt$time, Rt_min = data_estimated_rt$Rt_min_1, 
-                           Rt_max = data_estimated_rt$Rt_max_1, key = rep("nintyfive", length(data_estimated_rt$time)))
+  load(paste0("results/disconnected/region_disconnected_xyz",i,".rds"))
+  # fit <- fit_disconnected
+  est_Rt_disc <- fit$draws("Rt",format="matrix")
+  data_est_Rt_disc <- data.frame(est_Rt_disc_mean = colMeans(est_Rt_disc),
+                                 Rt_disc_min_1 = colQuantiles(est_Rt_disc,prob=0.025),
+                                 Rt_disc_max_1 = colQuantiles(est_Rt_disc,prob=0.975),
+                                 Rt_disc_min_2 = colQuantiles(est_Rt_disc,prob=0.25),
+                                 Rt_disc_max_2 = colQuantiles(est_Rt_disc,prob=0.75),
+                                 time = seq(from=inf_start_date ,to =  end_date, by = "day"))
+  # data_est_Rt_disc <- data_est_Rt_disc %>%
+  #   filter(time >= fitting_start)
   
-  data_Rt_50 <- data.frame(time = data_estimated_rt$time, Rt_min = data_estimated_rt$Rt_min_2, 
-                           Rt_max = data_estimated_rt$Rt_max_2, key = rep("fifty", length(data_estimated_rt$time)))
+  data_Rt_disc_95 <- data.frame(time = data_est_Rt_disc$time, Rt_disc_min = data_est_Rt_disc$Rt_disc_min_1,
+                                Rt_disc_max = data_est_Rt_disc$Rt_disc_max_1, key = rep("nintyfive", length(data_est_Rt_disc$time)))
   
-  data_death_95 <- data.frame(time = data_estimated_death$week, death_min = data_estimated_death$death_min_1, 
-                              death_max = data_estimated_death$death_max_1, key = rep("nintyfive", length(data_estimated_death$week)))
+  data_Rt_disc_50 <- data.frame(time = data_est_Rt_disc$time, Rt_disc_min = data_est_Rt_disc$Rt_disc_min_2,
+                                Rt_disc_max = data_est_Rt_disc$Rt_disc_max_2, key = rep("fifty", length(data_est_Rt_disc$time)))
   
-  data_death_50 <- data.frame(time = data_estimated_death$week, death_min = data_estimated_death$death_min_2, 
-                              death_max = data_estimated_death$death_max_2, key = rep("fifty", length(data_estimated_death$week)))
+  data_Rt_disc <- data_Rt_disc_95
+  data_Rt_disc$key1 <- "95% CI of \ndisconnected Rt"
+  #---------------------------
   
-  data_Rt <- rbind(data_Rt_95, data_Rt_50)
-  levels(data_Rt$key) <- c("ninetyfive", "fifty")
+  est_inf_disc <- fit$draws("weekly_deaths",format="matrix")       #fit_disconnected$draws("infection", format = "matrix")
+  data_est_inf_disc <- data.frame(est_inf_disc_mean = colMeans(est_inf_disc),
+                                  inf_disc_min_1 = colQuantiles(est_inf_disc,prob=0.025),
+                                  inf_disc_max_1 = colQuantiles(est_inf_disc,prob=0.975),
+                                  inf_disc_min_2 = colQuantiles(est_inf_disc,prob=0.25),
+                                  inf_disc_max_2 = colQuantiles(est_inf_disc,prob=0.75),
+                                  time = seq(from=inf_start_date ,to =  end_date, by = "week"))
+  # data_est_inf_disc <- data_est_inf_disc %>%
+  #   filter(time >= fitting_start)
   
-  data_death <- rbind(data_death_95, data_death_50)
-  levels(data_death$key) <- c("ninetyfive", "fifty")
+  data_inf_disc_95 <- data.frame(time = data_est_inf_disc$time, inf_disc_min = data_est_inf_disc$inf_disc_min_1,
+                                 inf_disc_max = data_est_inf_disc$inf_disc_max_1, key = rep("nintyfive", length(data_est_inf_disc$time)))
   
-  Rt_threshold <- data.frame(time = data_estimated_rt$time, Rt = rep(1,length(data_estimated_rt$time)))
+  data_inf_disc_50 <- data.frame(time = data_est_inf_disc$time, inf_disc_min = data_est_inf_disc$inf_disc_min_2,
+                                 inf_disc_max = data_est_inf_disc$inf_disc_max_2, key = rep("fifty", length(data_est_inf_disc$time)))
   
+  # data_inf_disc <- rbind(data_inf_disc_95, data_inf_disc_50)
+  # levels(data_inf_disc$key) <- c("ninetyfive", "fifty")
+  data_inf_disc <- data_inf_disc_95
+  data_inf_disc$key1 <- "95% CI of estimated\ndisconnectded incidence"
   
-  p1 <- ggplot(data_estimated_rt)+
-    geom_ribbon(data = data_Rt, aes(x=time,ymin = Rt_min, ymax = Rt_max, fill=key))+
-    geom_line(data = data_estimated_rt, aes(x=time,y=Rt),color = "black",linewidth=0.8)+
-    geom_line(data = Rt_threshold, aes(x=time, y = Rt))+
+  #------- connected model --------------------------------------------------------------------------------------------
+  
+  fit <- fit_connected
+  est_Rt_con <- fit$draws("Rt",format="matrix")
+  data_est_Rt_con <- data.frame(est_Rt_con_mean = colMeans(est_Rt_con[,(((i-1)*final_time)+1):(i*final_time)]),
+                                Rt_con_min_1 = colQuantiles(est_Rt_con[,(((i-1)*final_time)+1):(i*final_time)],prob=0.025),
+                                Rt_con_max_1 = colQuantiles(est_Rt_con[,(((i-1)*final_time)+1):(i*final_time)],prob=0.975),
+                                Rt_con_min_2 = colQuantiles(est_Rt_con[,(((i-1)*final_time)+1):(i*final_time)],prob=0.25),
+                                Rt_con_max_2 = colQuantiles(est_Rt_con[,(((i-1)*final_time)+1):(i*final_time)],prob=0.75),
+                                time = seq(from=inf_start_date ,to =  end_date, by = "day"))
+  # data_est_Rt_con <- data_est_Rt_con %>%
+  #   filter(time >= fitting_start)
+  
+  data_Rt_con_95 <- data.frame(time = data_est_Rt_con$time, Rt_con_min = data_est_Rt_con$Rt_con_min_1,
+                               Rt_con_max = data_est_Rt_con$Rt_con_max_1, key = rep("nintyfive", length(data_est_Rt_con$time)))
+  
+  data_Rt_con_50 <- data.frame(time = data_est_Rt_con$time, Rt_con_min = data_est_Rt_con$Rt_con_min_2,
+                               Rt_con_max = data_est_Rt_con$Rt_con_max_2, key = rep("fifty", length(data_est_Rt_con$time)))
+  
+  #  data_Rt_con <- rbind(data_Rt_con_95, data_Rt_con_50)
+  #  levels(data_Rt_con$key) <- c("ninetyfive", "fifty")
+  data_Rt_con <- data_Rt_con_95
+  data_Rt_con$key1 <- "95% CI of \nconnected Rt"
+  #-------------------------------
+  
+  est_inf_con <- fit$draws("weekly_deaths",format="matrix")
+  data_est_inf_con <- data.frame(est_inf_con_mean = colMeans(est_inf_con[,(((i-1)*death_data_length)+1):(i*death_data_length)]),
+                                 inf_con_min_1 = colQuantiles(est_inf_con[,(((i-1)*death_data_length)+1):(i*death_data_length)],prob=0.025),
+                                 inf_con_max_1 = colQuantiles(est_inf_con[,(((i-1)*death_data_length)+1):(i*death_data_length)],prob=0.975),
+                                 inf_con_min_2 = colQuantiles(est_inf_con[,(((i-1)*death_data_length)+1):(i*death_data_length)],prob=0.25),
+                                 inf_con_max_2 = colQuantiles(est_inf_con[,(((i-1)*death_data_length)+1):(i*death_data_length)],prob=0.75),
+                                 time = seq(from=inf_start_date ,to =  end_date, by = "week"))
+  
+  # data_est_inf_con <- data_est_inf_con %>%
+  #   filter(time >= fitting_start)
+  
+  data_inf_con_95 <- data.frame(time = data_est_inf_con$time, inf_con_min = data_est_inf_con$inf_con_min_1,
+                                inf_con_max = data_est_inf_con$inf_con_max_1, key = rep("nintyfive", length(data_est_inf_con$time)))
+  
+  data_inf_con_50 <- data.frame(time = data_est_inf_con$time, inf_con_min = data_est_inf_con$inf_con_min_2,
+                                inf_con_max = data_est_inf_con$inf_con_max_2, key = rep("fifty", length(data_est_inf_con$time)))
+  
+  #  data_inf_con <- rbind(data_inf_95, data_inf_50)
+  #  levels(data_inf_con$key) <- c("ninetyfive", "fifty")
+  data_inf_con <- data_inf_con_95
+  data_inf_con$key1 <- "95% CI of estimated\nconnectded incidence"
+  
+  Rt_threshold <- data.frame(time = data_est_Rt_disc$time, Rt = rep(1,length(data_est_Rt_disc$time)))  # for Rt threshold horizontal line
+  
+  #---------- plot ------------------------------------------------------------------------------------------------
+  
+  colors_rt <- c("Connected Rt" = "#1a9850", "Disconnected Rt" = "#b2182b")#, "Simulated Rt"="black")
+  colors_incidence <- c("Estimated disconnected\nincidence" = "red4", "Estimated connected\nincidence" = "green4", "Simulated\nincidence"="coral3")
+  
+  plot_rt <- ggplot(data_est_Rt_disc)+
+    
+    geom_ribbon(data = data_Rt_disc, aes(x = time, ymin = Rt_disc_min, ymax = Rt_disc_max, fill=key1))+
+    geom_ribbon(data = data_Rt_con, aes(x = time, ymin = Rt_con_min, ymax = Rt_con_max, fill=key1))+
+    geom_line(data = data_est_Rt_disc, aes(x = time,y = est_Rt_disc_mean, color = "Disconnected Rt"), linewidth = 1.3)+
+    geom_line(data = data_est_Rt_con, aes(x = time, y = est_Rt_con_mean, color = "Connected Rt"), linewidth = 1.3)+
+    geom_line(data = Rt_threshold, aes(x=time, y = Rt),color = "black")+
+    geom_vline(xintercept = as.Date(c(first_lockdown_start,first_lockdown_end,second_lockdown_start,second_lockdown_end)), linetype = "dashed", color = "black", linewidth = 1)+
     xlab("")+
-    ylab("Estimated Rt")+
-    scale_x_date(date_breaks = "4 week", labels = date_format("%d %b"))+
-    scale_fill_manual(name = "", labels = c("50%", "95%"),
-                      values = c(alpha("deepskyblue4", 0.35), 
-                                 alpha("deepskyblue4", 0.25))) + 
-    ggtitle(paste(region,"region"))+
-    theme_pubr(base_family="sans") + 
-    theme(axis.text.x = element_text(angle = 45, hjust = 1), 
-          axis.title.y = element_text(size = 14),
-          legend.position = "None")  +
+    ylab(expression(R[t]))+
+    scale_fill_manual(name = "",
+                      values = c("95% CI of \nconnected Rt" = alpha("#1a9850", 0.25),
+                                 "95% CI of \ndisconnected Rt" = alpha("#b2182b", 0.25))) +
+    scale_color_manual(values = colors_rt)+
+    scale_x_date(date_labels = "%b %y", date_breaks = "1 month") + 
+    ggtitle(regions[i])+
+    theme_bw()+
+    theme(axis.text.x = element_text(angle = 50,hjust = 0.4, vjust = 0.4,size = 17,color="black"),
+          axis.text.y = element_text(size = 20,margin = margin(r=10),color="black"),
+          axis.title.y = element_text(size = 20, margin=margin(r=10)),
+          axis.title.x = element_text(size = 20, margin=margin(r=10)),
+          plot.title = element_text(size=20, margin = margin(l = 15,b=10),hjust = 0.5),
+          legend.position = "right",
+          legend.title = element_blank(),      # Increase legend title size
+          legend.text = element_text(size = 20),       # Increase legend text size
+          legend.key.size = unit(1.2, "cm"))+
     guides(fill=guide_legend(ncol=1))
-
   
-  p2 <-ggplot(data_estimated_death)+
-    geom_ribbon(data = data_death, aes(x=time, ymin = death_min, ymax = death_max, fill=key))+
-    geom_point(data = data_estimated_death, aes(x=week,y=reported_death),color = "coral",size =2)+
-    geom_line(data = data_estimated_death, aes(x=week,y=estimated_deaths),color = "black",linewidth=0.8)+
-    xlab("")+
-    ylab("Weekly reported deaths")+
-    scale_x_date(date_breaks = "4 week", labels = date_format("%d %b"))+
-    scale_fill_manual(name = "", labels = c("50%", "95%"),
-                      values = c(alpha("deepskyblue4", 0.35), 
-                                 alpha("deepskyblue4", 0.25))) + 
-    scale_shape_manual(values = 16)+
-    ggtitle(paste(region,"region"))+
-    theme_pubr(base_family="sans") + 
-    theme(axis.text.x = element_text(angle = 45, hjust = 1), 
-          axis.title.y = element_text(size = 14),
-          legend.position = "None")  +
-    guides(fill=guide_legend(ncol=1))
+  # if (i == 1){
+    # plot_rt <- plot_rt + ylab(expression(R[t]))+
+  #     theme(axis.title.y = element_text(size = 20, margin = margin(r=15)))
+  # }else {
+  #   plot_rt <- plot_rt + theme(axis.title.y = element_blank())
+  # }
 
-  return(list(p1,p2))
-}  
+  # plot(plot_rt)
+  assign(paste0("rt",i),plot_rt)
 
-#---------------------------- data and calling function -----------------------------------------------------------------
-#------------------------------------------------------------------------------------------------------------------------
+death_regions$column_to_plot <- death_regions[[i]]
+plot_inf <-ggplot(data_est_inf_disc)+
 
-epidemic_start <- 1
-inf_start_date <- ISOweek2date(paste0(2020, "-W", sprintf("%02d", epidemic_start), "-1"))
-end_date <- as.Date("31-12-2020",format = "%d-%m-%Y")
-complete_dates <- seq.Date(inf_start_date, end_date, by = "day")
-mondays <- complete_dates[weekdays(complete_dates) == "Monday"]
+  geom_ribbon(data = data_inf_disc, aes(x = time, ymin = inf_disc_min, ymax = inf_disc_max, fill=key1))+
+  geom_ribbon(data = data_inf_con, aes(x = time, ymin = inf_con_min, ymax = inf_con_max, fill=key1))+
+  geom_line(data = data_est_inf_disc, aes(x = time,y = est_inf_disc_mean, color = "Estimated disconnected\nincidence"), linewidth = 1)+
+  geom_line(data = data_est_inf_con, aes(x = time, y = est_inf_con_mean, color = "Estimated connected\nincidence"), linewidth = 1)+
+  geom_point(data = death_regions, aes(x = time, y = column_to_plot, color = "Simulated\nincidence")) +
 
-region_name <- c("North east","North west","Yorkshire and the humber","East midlands","West midlands","East","London","South east","South west")
-
-data_regions <- data.frame()
-
-plots <- list()
-
-for (i in 1:5){
-  
-  day <- length(complete_dates)
-  week <- length(mondays)
-  region <- region_name[i]
-  
-  estimated_rt <- out$Rt[,,i]
-  data_estimated_rt <- data.frame(Rt = colMeans(estimated_rt),
-                                  Rt_min_1 = colQuantiles(estimated_rt,prob=0.025),
-                                  Rt_max_1 = colQuantiles(estimated_rt,prob=0.975),
-                                  Rt_min_2 = colQuantiles(estimated_rt,prob=0.25),
-                                  Rt_max_2 = colQuantiles(estimated_rt,prob=0.75),
-                                  time = complete_dates)
-  
-  estimated_deaths <-  out$weekly_deaths[,,i]
-  data_estimated_death <- data.frame(estimated_deaths = colMeans(estimated_deaths),
-                                     death_min_1 = colQuantiles(estimated_deaths,prob=0.025),
-                                     death_max_1 = colQuantiles(estimated_deaths,prob=0.975),
-                                     death_min_2 = colQuantiles(estimated_deaths,prob=0.25),
-                                     death_max_2 = colQuantiles(estimated_deaths,prob=0.75),
-                                     reported_death = death_regions[,i],
-                                     week = mondays)
-  
-  result <- make_plots(i,data_estimated_rt, data_estimated_death,region) 
-  plots <- c(plots,result)
-}
-
-combined_plot <- plot_grid(plotlist = plots,ncol=2,nrow=5)
-plot(combined_plot)
-
-# ggsave(filename = paste0("figures/region_fitting1_5.png"), plot = combined_plot, width=16, height=16, units="in")
-
-
-#----------------------- region and national model comparison (Rt) ----------------------------------------------------------------------
-#------------------------------------------------------------------------------------------------------------------------
-
-load("results/region_fitting.Rdata")    # region fitting data
-
-epidemic_start <- 1
-inf_start_date <- ISOweek2date(paste0(2020, "-W", sprintf("%02d", epidemic_start), "-1"))
-end_date <- as.Date("31-12-2020",format = "%d-%m-%Y")
-complete_dates <- seq.Date(inf_start_date, end_date, by = "day")
-
-
-region_name <- c("North east","North west","Yorkshire and the humber","East midlands","West midlands","East","London","South east","South west")
-estimated_Rt_region <- data.frame(matrix(nrow = dim(out$Rt)[2] , ncol=length(region_name)))
-colnames(estimated_Rt_region) <- region_name
-
-region_colors <- c("North east" = "#e41a1c", 
-                   "North west" = "#377eb8", 
-                   "Yorkshire and the humber" = "#4daf4a", 
-                   "East midlands" = "#984ea3", 
-                   "West midlands" = "#ff7f00", 
-                   "East" = "#ffff33", 
-                   "London" = "#a65628", 
-                   "South east" = "#f781bf", 
-                   "South west" = "#999999")
-
-for (i in 1:length(region_name)){
-  estimated_Rt_region[[i]] <- colMeans(out$Rt[,,i])
-}
-estimated_Rt_region$time <- complete_dates
-
-melted_Rt_region <- reshape2::melt(estimated_Rt_region, id.vars = "time", variable.name = "region",value.name = "Rt")   # id.vars = x axis, variable, legend, value = yaxis
-
-load("results/national_fitting.Rdata")      # national fitting data
-out_national <- rstan::extract(fit)
-estimated_Rt_national <- data.frame(Rt = colMeans(out_national$Rt),
-                                    Rt_min_1 = colQuantiles(out_national$Rt,prob=0.025),
-                                    Rt_max_1 = colQuantiles(out_national$Rt,prob=0.975),
-                                    Rt_min_2 = colQuantiles(out_national$Rt,prob=0.25),
-                                    Rt_max_2 = colQuantiles(out_national$Rt,prob=0.75),
-                                    time= complete_dates)
-
-data_Rt_95 <- data.frame(time = estimated_Rt_national$time, Rt_min = estimated_Rt_national$Rt_min_1, 
-                         Rt_max = estimated_Rt_national$Rt_max_1, key = rep("nintyfive", length(estimated_Rt_national$time)))
-
-data_Rt_50 <- data.frame(time = estimated_Rt_national$time, Rt_min = estimated_Rt_national$Rt_min_2, 
-                         Rt_max = estimated_Rt_national$Rt_max_2, key = rep("fifty", length(estimated_Rt_national$time)))
-
-
-quant_Rt_national <- rbind(data_Rt_95, data_Rt_50)
-quant_Rt_national$key <- factor(quant_Rt_national$key, levels = c("ninetyfive", "fifty"))
-
-Rt_threshold <- data.frame(time = data_estimated_rt$time, Rt = rep(1,length(data_estimated_rt$time)))
-estimated_Rt_national$country <- "National"
-
-p <- ggplot()+
-  geom_ribbon(data = quant_Rt_national, aes(x=time, ymin = Rt_min, ymax = Rt_max, fill=key))+
-  geom_line(data = melted_Rt_region,aes(x=time,y=Rt,color = region),linewidth =0.6)+
-  geom_line(data = estimated_Rt_national, aes(x=time, y = Rt,linetype = "National"),color="midnightblue", linewidth = 1)+
-  geom_line(data = Rt_threshold, aes(x=time, y = Rt),linewidth =0.6)+
-  labs(x = "", y= " Estimated Rt")+
-  scale_x_date(date_breaks = "4 weeks", labels = date_format("%d %b"))+
-  scale_fill_manual(name = "", labels = c("50% CI of Rt_national", "95% CI of Rt_national"),
-                    values = c(alpha("deepskyblue4", 0.35), 
-                               alpha("deepskyblue3", 0.25))) + 
-  scale_color_manual(name = "region", values = region_colors) +
-  scale_linetype_manual(name = NULL, values = c("National" = "solid")) +
-  ggtitle("Estimated Rt")+
-  theme_pubr(base_family="sans") + 
-  theme(axis.text.x = element_text(angle = 45, hjust = 1), 
-        axis.title.y = element_text(size = 14),
+  xlab("")+
+  ylab("Weekly deaths")+
+  scale_fill_manual(name = "",
+                    values = c("95% CI of estimated\ndisconnectded incidence" = alpha("red4", 0.25),
+                               "95% CI of estimated\nconnectded incidence" = alpha("seagreen3", 0.25))) +
+  scale_color_manual(values = colors_incidence)+
+  scale_shape_manual(values = 16)+
+  ggtitle(regions[i])+
+  scale_x_date(date_labels = "%b %y", date_breaks = "1 month") + 
+  theme_bw()+
+  theme(axis.text.x = element_text(angle =50, hjust = 0.5,vjust = 0.4,size =17,color="black"),
+        axis.text.y = element_text(size = 15),
+        axis.title.x = element_text(size = 20, margin = margin(t=10)),
+        plot.title = element_text(size=20, margin = margin(l = 15,b=10),hjust = 0.5),
         legend.position = "right",
-        legend.title = element_text(size = 14),      # Increase legend title size
-        legend.text = element_text(size = 12),       # Increase legend text size
-        legend.key.size = unit(1.5, "cm")) +         # Increase legend key size
+        legend.title = element_blank(),      # Increase legend title size
+        legend.text = element_text(size = 17),       # Increase legend text size
+        legend.key.size = unit(1.2, "cm"))  +
+
   guides(fill=guide_legend(ncol=1))
+# if (i == 1){
+  # plot_inf <- plot_inf + ylab("Incidence")+
+#     theme(axis.title.y = element_text(size = 20, margin = margin(r=10)))
+# }else {
+#   plot_inf <- plot_inf + theme(axis.title.y = element_blank())
+# }
 
-plot(p)
+# plot(plot_inf)
+assign(paste0("inf",i),plot_inf)
+}
 
-# ggsave(filename = paste0("figures/national_region_rt.png"), plot = p, width=12, height=8, units="in")
+legend_rt <- get_legend(plot_rt)
+legend_inf <- get_legend(plot_inf) 
 
-
-
-
-
-
-
-
-
+# Remove legends from individual plots
+plot_rt_list <-  list(rt1,rt2,rt3,rt4,rt5,rt6,rt7,rt8,rt9)
+plot_inf_list <-  list(inf1,inf2,inf3,inf4,inf5,inf6,inf7,inf8,inf9)
 
 
+for (i in 1:length(plot_rt_list)){
+  plot_rt_list[[i]] <- plot_rt_list[[i]] + theme(legend.position = "none")
+}
+
+for (i in 1:length(plot_inf_list)){
+  plot_inf_list[[i]] <- plot_inf_list[[i]] + theme(legend.position = "none")
+}
+
+p_rt <- plot_grid(do.call(plot_grid, c(plot_rt_list,  nrow = 3, ncol = 3)),legend_rt,nrow=1,rel_widths =c(2.5,0.38))
+p_inf <- do.call(plot_grid, c(plot_inf_list, nrow = 3, ncol = 3))
+
+p_rt <- p_rt + theme(plot.background = element_rect(fill = "white", color = NA))
+p_rt <- ggdraw() +
+  draw_label("Estimated Rt with double mobility", fontface = 'bold', x = 0.5, y = 0.98, hjust = 0.5, size = 20) +  # Title
+  draw_plot(p_rt, y = 0, height = 0.95)  # Add the combined plot
+print(p_rt)
+
+p_inf <- p_inf + theme(plot.background = element_rect(fill = "white", color = NA))
+print(p_inf)
+#---------------
+
+ggsave(filename = paste0("figures/estimated_rt_xyz_double_mob.png"), plot = p_rt, width=20, height=15, units="in")
+# ggsave(filename = paste0("figures/estimated_data.png"), plot = p_inf, width=12, height=8, units="in")
+
+#----- plot original weekly death data ----------------------------------------------------------------
+
+death_data <- data.frame(stan_data_connected$death )      # form stan_data_arrangements.R
+inf_start_date <- as.Date("27-01-2020",format = "%d-%m-%Y")
+fitting_start <- as.Date("09-03-2020", format = "%d-%m-%Y")
+end_date <- as.Date("31-12-2020", format = "%d-%m-%Y")
+first_lockdown_start <- as.Date("2020-03-23", format = "%Y-%m-%d")
+first_lockdown_end <- as.Date("2020-05-10", format = "%Y-%m-%d")
+
+second_lockdown_start <- as.Date("2020-11-05", format = "%Y-%m-%d")  
+second_lockdown_end <- as.Date("2020-12-02", format = "%Y-%m-%d") 
+regions <- c("North East","North West","Yorkshire and \nthe Humber","East Midlands","West Midlands","East","London","South East","South West")
+colnames(death_data) <- regions
+death_data$time <- seq(from=inf_start_date ,to = end_date, by = "week")
+data_long <- pivot_longer(death_data, cols = -time, names_to = "Column", values_to = "Value")
+
+# Plot each column as a curve using ggplot
+p <- ggplot(data_long, aes(x = time, y = Value, color = Column)) +
+  geom_line(,linewidth = 1.2) + 
+  geom_vline(xintercept = as.Date(c(first_lockdown_start,first_lockdown_end,second_lockdown_start,second_lockdown_end)), linetype = "dashed", color = "black", linewidth = 1)+
+  labs(title = "Weekly death data for each region",
+       x = "",
+       y = "Weekly death data",
+       color = "") +
+  scale_x_date(date_labels = "%b %y", date_breaks = "1 month") + 
+  scale_color_manual(values = c("North East" = "#a6cee3", "North West" = "#1f78b4", "Yorkshire and \nthe Humber" = "#b2df8a", 
+                                "East Midlands" = "#33a02c", "West Midlands" = "#fb9a99","East"="#e31a1c","London"="#fdbf6f","South East"="#ff7f00","South West"="#cab2d6")) +  # Set specific colors for each region
+  theme_bw()+
+  theme(axis.text.x = element_text(angle =50, hjust = 0.5,vjust = 0.4,size =14,color="black"),
+        axis.text.y = element_text(size = 16,color="black"),
+        axis.title.y = element_text(size = 16, margin = margin(t=10)),
+        plot.title = element_text(size=18, margin = margin(l = 15,b=10),hjust = 0.5),
+        legend.position = "right",
+        legend.title = element_text(size = 16),      # Increase legend title size
+        legend.text = element_text(size = 14),       # Increase legend text size
+        legend.key.size = unit(1.2, "cm"),
+        legend.spacing.y = unit(0.05, "cm"))
+
+ggsave(filename = paste0("figures/death_data.png"), plot = p, width=8, height=5, units="in")
 
 
 
+# ------------ mobility matrix------------------------------------------------------------------------
 
-
+mobility <- stan_data_connected$C_base
+mobility_df <- melt(mobility)
+colnames(mobility_df) <- c("X", "Y", "Value")
+mobility_df$X <- factor(mobility_df$X, labels = regions)
+mobility_df$Y <- factor(mobility_df$Y, labels = regions)
+ggplot(mobility_df, aes(x = Y, y = X, fill = Value)) +
+  geom_tile() +  # Create the heatmap
+  geom_text(aes(label = sprintf("%.2f", Value)), color = "black", size = 6,fontface="bold") +  # Add values inside the tiles
+  scale_fill_gradient(low = "#fff", high = "#5ab4ac") +  # Color gradient for the values
+  theme_minimal() +
+  labs(title = "Mobility matrix", x = "", y = "", fill = "Value") +  # Axis and legend labels
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, size = 17,color="black"),  # Rotate x-axis labels and set size
+        axis.text.y = element_text(size = 17,color="black"),
+        plot.title = element_text(size=18, margin = margin(l = 15,b=10),face = "bold"),
+        legend.position = "none")  # Set y-axis text size
 
 

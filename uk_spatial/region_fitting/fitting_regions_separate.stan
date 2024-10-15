@@ -10,6 +10,8 @@ data {
   int pop;
   array[final_time] int<lower=0> day_week_index;
   int fitting_start; 
+  array[final_time] real gmobility;
+  array[final_time,4] int II;
 }
 
 transformed data {
@@ -31,6 +33,9 @@ parameters {
   real<lower=0> weekly_var;       //weekly variance
   vector[W] weekly_effect_d;     //parameters for Rt (why W+1).     ?????
   real<lower=0> phi2;
+  real x;
+  real y;
+  real z;
 }
 
 transformed parameters{
@@ -46,14 +51,16 @@ transformed parameters{
  // for initial seeding
       infection[1:initial_seeding_day] = rep_vector(initial_seeding, initial_seeding_day);      // learn the number of cases in the first initial seeding days
       weekly_effect = weekly_var * cumulative_sum(weekly_effect_d) ;    // weekly effect
-      Rt[1:initial_seeding_day] = rep_vector(mu * 2 * inv_logit(- weekly_effect[1]),initial_seeding_day);   // why this is weekly_effect[m]??
+            Rt[1:initial_seeding_day] = rep_vector(mu * 2 * inv_logit(- weekly_effect[1]),initial_seeding_day);   // why this is weekly_effect[m]??
   
   for (t in (initial_seeding_day+1):final_time){ //for loop over time
-      // weekly_effect = weekly_var * cumulative_sum(weekly_effect_d) ;    // weekly effect
-      Rt[t] = mu * 2 * inv_logit(- weekly_effect[day_week_index[t]]);   // why this is weekly_effect[m]??
+      Rt[t] = mu * 2 * inv_logit(- weekly_effect[day_week_index[t]] 
+                                 - x * gmobility[t] * II[t,2] 
+				                         - y * gmobility[t] * II[t,3]
+				                         - z * gmobility[t] * II[t,4]);
 
       real convolution = dot_product(infection[1: (t-1)], tail(SI_rev, t-1));
-      
+      // 
       real sus = pop - sum(infection[1:(t-1)]);
       infection[t] = (sus/pop) * Rt[t] * convolution ;
     }
@@ -63,10 +70,10 @@ transformed parameters{
     daily_deaths[t] =  dot_product(infection[1:(t-1)], tail(f_rev,t-1)); 
     }
   
-  for (t in 1:(final_time/7)) {        //weekly_deaths
+  for (t in 1:(final_time %/%7)) {        //weekly_deaths
     weekly_deaths[t] = sum(daily_deaths[(7*(t-1)+1):7*t]);
     }
-    weekly_deaths[(final_time/7)+1] = sum(daily_deaths[(7*(final_time/7)+1) : final_time]);
+    weekly_deaths[(final_time %/% 7)+1] = sum(daily_deaths[(7*(final_time %/% 7)+1) : final_time]);
   }
 }
 
@@ -76,8 +83,11 @@ model {
  initial_seeding ~ exponential(1/tau);
  
  // kappa ~ normal(0,0.5);
- mu ~ normal(3.28,0.2);
- 
+ mu ~ normal(3.28,0.5);
+ x ~ normal(0,0.5);
+ y ~ normal(x,0.5);
+ z ~ normal(y,0.5);
+
  weekly_var ~ normal(0,.2);
     
  weekly_effect_d[1] ~ normal(0,1);

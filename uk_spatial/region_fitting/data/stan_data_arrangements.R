@@ -7,6 +7,8 @@ load("data/uk_regions_mobility_matrix.Rdata")
 
 #-------- death data rrangements -------------------------------------------------------
 #------- regions index -----------------------------------------------------------------
+pop_2020$region <- sapply(pop_2020$region, function(x){
+  paste0(toupper(substring(x,1,1)),tolower(substring(x,2)))})
 
 north_east_index <- which(pop_2020$region == "North east")
 north_west_index <- which(pop_2020$region == "North west")
@@ -30,8 +32,7 @@ death_regions <- data.frame(north_east = apply(death_data[,north_east_index],1,s
                             south_east = apply(death_data[,south_east_index],1,sum),
                             south_west = apply(death_data[,south_west_index],1,sum))
 
-pop_2020$region <- sapply(pop_2020$region, function(x){
-  paste0(toupper(substring(x,1,1)),tolower(substring(x,2)))})
+
 
 death_data <- death_data %>% select(all_of(pop_2020$area_name))  
 death_regions$total_death <- apply(death_data,1, sum)
@@ -72,12 +73,19 @@ pop_region$population <- population_region
 M_regions <-ncol(death_regions)-1     # number of region
 
 C_base <- mobmatrix_region_norm   # mobility matrix 
-C_lockdown <- diag(M_regions)
+# C_base <- 2 * C_base
+# diag(C_base) <- 1 - (colSums(C_base) - diag(C_base))
+
+
+C_lockdown <- matrix(0.0001,M_regions,M_regions)
+diag(C_lockdown) <- 0.9992
+
+# C_lockdown <- diag(M_regions)
 
 initial_seeding_day = 6
 pop = pop_region$population[1:M_regions]          #pop_2020$population[1:M_regions]
 
-death_regions <- death_regions[epidemic_start:nrow(death_regions),1:M_regions]   #(adjust accordingly)
+death_regions <- death_regions[epidemic_start: (epidemic_start + ceiling(final_time/7) -1 ),1:M_regions]   #(adjust accordingly)
 death_len_data <- nrow(death_regions)
 fitting_death_start <- infection_gen_time + 1
 
@@ -103,7 +111,7 @@ mobility_change_region <- mobility_change %>%
 mobility_change_region$date <- as.Date(mobility_change_region$date, format = "%Y-%m-%d")
 
 if (min(mobility_change_region$date) > inf_start_date){
-  new_dates <- seq.Date(from = inf_start_date, to = min(mobility_change_region$date), by = "day")
+  new_dates <- seq.Date(from = inf_start_date, to = min(mobility_change_region$date) -1, by = "day")
   new_rows <- expand.grid(region = unique(mobility_change_region$region), date = new_dates)
   new_rows <- new_rows %>% mutate(avg_retail_and_recreation_percent_change_from_baseline = 0,
                                   ave_grocery_and_pharmacy_percent_change_from_baseline = 0,
@@ -122,10 +130,9 @@ for (i in 1:M_regions){
 }
 
 for (m in 1:M_regions) {
-  for (i in 1:4){
+  for (i in 1:5){
     for (t in 1:(final_time)){
       if (is.nan(gmobility[t,i,m])){
-        
         prev_val <- if (t > 1) gmobility[max(which(!is.nan(gmobility[1:(t-1),i,m] ))),i,m]
         next_val <- if (t < final_time) gmobility[(min(which(!is.nan(gmobility[(t+1):final_time,i,m]))) + t),i,m]
         gmobility[t,i,m] <- (prev_val + next_val)/2
@@ -133,6 +140,15 @@ for (m in 1:M_regions) {
     }
   }
 }
+
+gm <- matrix(NA, nrow = final_time, ncol = M_regions)
+for (m in 1:M_regions){
+  gm[,m] = (gmobility[,1,m] + gmobility[,2,m] + gmobility[,3,m] + gmobility[,4,m] + gmobility[,5,m])/5;   
+}
+
+# colors <- rainbow(M_regions)  # Generates M_regions distinct colors
+# matplot(gm, type = "l", lty = 1, col = colors, xlab = "Time", ylab = "Average Mobility")
+# legend("topright", legend = paste("Region", 1:M_regions), col = colors, lty = 1, cex = 0.8)
 
 #------------- lockdown effect --------------------------------------------------------------------------------
 
@@ -144,12 +160,12 @@ lockdown2_lifted <- as.Date("2020-12-02", format = "%Y-%m-%d")
 
 lockdown_index <-  data.frame(date = seq.Date(from = inf_start_date,as.Date("2020-12-31",format = "%Y-%m-%d"),by="day"))
 lockdown_index$r_mobility_index <- rep(0,nrow(lockdown_index))
-lockdown_index$r_mobility_index[lockdown_index$date >= lockdown1_started & lockdown_index$date <= lockdown1_lifted] <- 1
-lockdown_index$r_mobility_index[lockdown_index$date >= lockdown2_started & lockdown_index$date <= lockdown2_lifted] <- 1
+lockdown_index$r_mobility_index[lockdown_index$date >= lockdown1_started & lockdown_index$date < lockdown1_lifted] <- 1
+lockdown_index$r_mobility_index[lockdown_index$date >= lockdown2_started & lockdown_index$date < lockdown2_lifted] <- 1
 
 lockdown_index$g_mobility_index <-  rep(3,nrow(lockdown_index))
-lockdown_index$g_mobility_index[lockdown_index$date <= lockdown1_lifted] <- 1
-lockdown_index$g_mobility_index[lockdown_index$date >= lockdown1_lifted & lockdown_index$date <= lockdown2_lifted] <- 2
+lockdown_index$g_mobility_index[lockdown_index$date < lockdown1_lifted] <- 1
+lockdown_index$g_mobility_index[lockdown_index$date >= lockdown1_lifted & lockdown_index$date < lockdown2_lifted] <- 2
 
 first_lockdown_end <- which(lockdown_index$g_mobility_index == 2)[1]
 second_lockdown_end <- which(lockdown_index$g_mobility_index == 3)[1]
@@ -159,6 +175,7 @@ lockdown_index$L2 <- ifelse(lockdown_index$g_mobility_index == 2,1,0)
 lockdown_index$L3 <- ifelse(lockdown_index$g_mobility_index == 3,1,0)
 
 lockdown_index <- lockdown_index %>% select(- g_mobility_index, -date)
+lockdown_index <- lockdown_index[1:final_time,]
 
 
 
@@ -168,7 +185,7 @@ dist <- distributions(final_time)
 stan_data <- list(M_regions= M_regions,
                   final_time=final_time,
                   W = week,
-                  gmobility = gmobility,
+                  gmobility = gm,
                   initial_seeding_day = initial_seeding_day,
                   death_data_length = death_len_data,
                   death= as.matrix(death_regions),

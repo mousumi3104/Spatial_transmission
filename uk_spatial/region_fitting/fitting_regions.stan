@@ -2,7 +2,7 @@ data {
   int<lower=1> M_regions;
   int<lower=1> final_time;    //number of days to simulate
   int W;      // number weeks to simulate
-  array[final_time, 5, M_regions] real gmobility;
+  matrix[final_time, M_regions] gmobility;
   int<lower=1> initial_seeding_day;
   int<lower=1> death_data_length;
   array[death_data_length, M_regions] int<lower=0> death;       //number of infected individual at any time
@@ -11,8 +11,8 @@ data {
   vector[M_regions] pop;
   matrix[M_regions,M_regions] C_base;
   matrix[M_regions,M_regions] C_lockdown;
-  array[final_time] int<lower = 0> day_week_index;
-  array[final_time, 4] int I;
+  array[final_time] int day_week_index;
+  matrix[final_time, 4] I;
   int first_lockdown_end;
   int second_lockdown_end;
   int fitting_death_start;
@@ -40,29 +40,20 @@ parameters {
   real<lower=0> phi1;
   array[M_regions] real<lower=0> ifr_noise;
   real<lower = 0> gamma;
-  array[M_regions] real x1;
-  array[M_regions] real x2;
-  array[M_regions] real x3;
-  array[M_regions] real x4;
-  array[M_regions] real x5;
-  array[M_regions] real y1;
-  array[M_regions] real y2;
-  array[M_regions] real y3;
-  array[M_regions] real y4;
-  array[M_regions] real y5;
-  array[M_regions] real z1;
-  array[M_regions] real z2;
-  array[M_regions] real z3;
-  array[M_regions] real z4;
-  array[M_regions] real z5;
+  vector[M_regions] x1;
+  vector[M_regions] y1;
+  vector[M_regions] z1;
 }
 
 transformed parameters{
-   matrix[final_time, M_regions] infection = rep_matrix(0, final_time, M_regions);    // daily initialization
-   matrix[final_time, M_regions] daily_deaths = rep_matrix(0,final_time, M_regions);      // daily deaths (infection becomes a case after latent period)
-   matrix[death_data_length, M_regions] weekly_deaths = rep_matrix(0, death_data_length, M_regions);
-   matrix[W,M_regions] weekly_effect = rep_matrix(0,W,M_regions);   // check why this +1 is needed
-   matrix[ final_time, M_regions] Rt = rep_matrix(0, final_time, M_regions);   //reproduction number
+   // vector[M_regions] y1 = x1 + ymx;
+   // vector[M_regions] z1 = y1 + zmy;
+   
+   matrix[final_time, M_regions] infection;    // daily initialization
+   matrix[final_time, M_regions] daily_deaths;      // daily deaths (infection becomes a case after latent period)
+   matrix[death_data_length, M_regions] weekly_deaths;
+   matrix[W,M_regions] weekly_effect;   // check why this +1 is needed
+   matrix[ final_time, M_regions] Rt;   //reproduction number
     
    //-------------------------------------------------------------------------------------------------//
    matrix[final_time, M_regions] SI_regions = rep_matrix(SI_rev,M_regions);  // serial interval for every region
@@ -71,24 +62,42 @@ transformed parameters{
    for (m in 1:M_regions){                  // for initial seeding
       infection[1:initial_seeding_day,m] = rep_vector(initial_seeding[m], initial_seeding_day);  //initial_seeding[m]
       weekly_effect[:,m] = weekly_var * cumulative_sum(weekly_effect_d[:,m]);
-      Rt[:,m] = mu[m] * 2 * inv_logit(- weekly_effect[day_week_index, m] 
-                                      - x1[m] * (to_vector(gmobility[:,1,m]) .* to_vector(I[:,2])) - x2[m] * (to_vector(gmobility[:,2,m]) .* to_vector(I[:,2])) - x3[m] * (to_vector(gmobility[:,3,m]) .* to_vector(I[:,2])) - x4[m] * (to_vector(gmobility[:,4,m]) .* to_vector(I[:,2])) - x5[m] * (to_vector(gmobility[:,5,m]) .* to_vector(I[:,2]))
-                                      - y1[m] * (to_vector(gmobility[:,1,m]) .* to_vector(I[:,3])) - y2[m] * (to_vector(gmobility[:,2,m]) .* to_vector(I[:,3])) - y3[m] * (to_vector(gmobility[:,3,m]) .* to_vector(I[:,3])) - y4[m] * (to_vector(gmobility[:,4,m]) .* to_vector(I[:,3])) - y5[m] * (to_vector(gmobility[:,5,m]) .* to_vector(I[:,3]))
-                                      - z1[m] * (to_vector(gmobility[:,1,m]) .* to_vector(I[:,4])) - z2[m] * (to_vector(gmobility[:,2,m]) .* to_vector(I[:,4])) - z3[m] * (to_vector(gmobility[:,3,m]) .* to_vector(I[:,4])) - z4[m] * (to_vector(gmobility[:,4,m]) .* to_vector(I[:,4])) - z5[m] * (to_vector(gmobility[:,5,m]) .* to_vector(I[:,4])));
+      Rt[1:initial_seeding_day, m] = rep_vector(mu[m] * 2 * inv_logit(- weekly_effect[1, m]) , initial_seeding_day);
     }
     
+    // {
+    //   matrix[final_time - initial_seeding_day,M_regions] weekly_effect_gmobility;
+    //   for (m in 1:M_regions){
+    //     weekly_effect_gmobility[:,m] = inv_logit(- weekly_effect[day_week_index[(initial_seeding_day+1):final_time], m]
+    //                                              - x1[m] * (gmobility[(initial_seeding_day+1):final_time,m] .* I[(initial_seeding_day+1):final_time,2])
+    //                                              - y1[m] * (gmobility[(initial_seeding_day+1):final_time,m] .* I[(initial_seeding_day+1):final_time,3])
+    //                                              - z1[m] * (gmobility[(initial_seeding_day+1):final_time,m] .* I[(initial_seeding_day+1):final_time,4])
+    //                                              );
+    //     Rt[(initial_seeding_day+1):final_time,m] = mu[m] * 2 * weekly_effect_gmobility[:,m];
+    //   } 
+    // }
+   { 
+   for (m in 1:M_regions){
+      for (t in (initial_seeding_day+1):final_time){
+          Rt[t,m] = mu[m] * 2 * inv_logit(- weekly_effect[day_week_index[t], m]
+                                     - (x1[m] * gmobility[t,m] * I[t,2]) 
+                                     - (y1[m] * gmobility[t,m] * I[t,3]) 
+                                     - (z1[m] * gmobility[t,m] * I[t,4]));
+      }
+     }
+   }
+   
    for (t in (initial_seeding_day + 1) : final_time){ //for loop over time
-      row_vector[M_regions] convolution_inf = columns_dot_product(infection[1:(t-1),:] , SI_regions[(final_time-t+2):final_time,:]);  //infections at each region "k"
+      vector[M_regions] convolution_inf = (columns_dot_product(infection[1:(t-1),:] , SI_regions[(final_time-t+2):final_time,:]))';  //infections at each region "k"
       matrix[M_regions,M_regions] C;
+      
       if (I[t,1] == 0){
         C = C_base ;
       }else{
         C = C_lockdown ;
       }
-
-      // C = C_base;
       
-      vector[M_regions] total_inf = C * convolution_inf';     //total infection at region "j"
+      vector[M_regions] total_inf = C * convolution_inf;     //total infection at region "j"
       vector[M_regions] eff_pop = C * pop;
       
       for (m in 1:M_regions){
@@ -96,12 +105,10 @@ transformed parameters{
         infection[t,m] = dot_product(C[:,m]', (((rep_vector(sus , M_regions) ./ eff_pop)'.* Rt[t,:]).* total_inf'));
       }
     }
-   for (m in 1:M_regions){
-      daily_deaths[1,m] = 1e-15 * infection[1,m];
-      for (t in 2:final_time){
-        daily_deaths[t,m] = ifr_noise[m] * dot_product(sub_col(infection, 1 , m, t-1), tail(f_rev, t-1));  // ifr_noise[m] * 
+    daily_deaths[1,:] = 1e-15 * infection[1,:];
+     for (t in 2:final_time){
+        daily_deaths[t,:] = (to_vector(ifr_noise))' .* columns_dot_product(infection[1:(t-1),:] , f_regions[(final_time-t+2):final_time,:]);
       }
-    }
   
    for (m in 1:M_regions){
      for (t in 1:(final_time %/% 7)) { //weekly_deaths
@@ -113,37 +120,26 @@ transformed parameters{
 
 model {
  phi1 ~ normal(0,5);
- tau ~ exponential(0.03);
+ tau ~ exponential(0.01);
  weekly_var ~ normal(0,.2);
  // kappa ~ normal(0,0.5);
  mu ~ normal(3.28,0.5);
  initial_seeding ~ exponential(1/tau);
- ifr_noise ~ normal(1,0.1);
+ to_vector(ifr_noise) ~ normal(1,0.1);
  gamma ~ normal(0,0.5);
- x1 ~ normal(0,gamma);
- x2 ~ normal(0,gamma);
- x3 ~ normal(0,gamma);
- x4 ~ normal(0,gamma);
- x5 ~ normal(0,gamma);
- y1 ~ normal(0,gamma);
- y2 ~ normal(0,gamma);
- y3 ~ normal(0,gamma);
- y4 ~ normal(0,gamma);
- y5 ~ normal(0,gamma);
- z1 ~ normal(0,gamma);
- z2 ~ normal(0,gamma);
- z3 ~ normal(0,gamma);
- z4 ~ normal(0,gamma);
- z5 ~ normal(0,gamma);
-  
-  for (m in 1:M_regions){
-    weekly_effect_d[1,m] ~ normal(0, 1);
-    for (week in 2:W){
-      weekly_effect_d[week,m] ~ normal(0, 1);
+ 
+ x1 ~ normal(0, gamma);
+ y1 ~ normal(0, gamma);
+ z1 ~ normal(0, gamma);
+ to_vector(weekly_effect_d) ~ normal(0, 1);
+
+// target += reduce_sum(partial_sum_lpmf, fitting_death_start, death_data_length, 1, M_regions, death, weekly_deaths, phi1);
+  // vector[W*M_regions] N_death = to_vector(death);
+ // vector[W*M_regions] N_weekly_deaths = to_vector(weekly_deaths); 
+ // target += neg_binomial_2_lpmf(N_death| N_weekly_deaths, phi1);
+  for (t in fitting_death_start:death_data_length){
+    for (m in 1:M_regions){
+      target += neg_binomial_2_lpmf(death[t,m]| weekly_deaths[t,m], phi1);
     }
   }
-  
- for (week in fitting_death_start:death_data_length){
-    target += neg_binomial_2_lpmf(death[week, :]| weekly_deaths[week, :], phi1);
- }
 }

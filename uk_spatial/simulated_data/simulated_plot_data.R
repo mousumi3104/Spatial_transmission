@@ -1,3 +1,5 @@
+# this is the plot for simulated data. The estimated connected rt and estimated disconnected rt
+
 library(data.table)
 library(lubridate)
 library(gdata)
@@ -22,31 +24,35 @@ setwd(script_directory)
 
 #-------- load data ----------------------------------------------------------------------
 load("data/simulated_data.Rdata")
-load("data/connected_region_fitting.Rdata")
-load("data/fitting_national.Rdata")
+load("results/forecast/connected_region_fitting_forecast.Rdata")
+# load("data/fitting_national.Rdata")
 
 M_regions <- 3
-final_time <- 70 * 7
+
 #-------- arrangement to plot -----------------------------------------------------------------------------
 
 #---------- true data -------------------------------------------------------------------------------------
 true_infection <- daily_infection_data
 true_infection$index <- 1:nrow(true_infection)
 true_Rt <- Rt
-
+true_Rt <- true_Rt %>% filter(index <= 350)
   
 #---------- disconnected model ------------------------------------------------------------------------------------
 for (i in 1:M_regions){
   
-  load("data/disconnected_region_fitting.Rdata")
-  fit <- fit_disconnected
+  load(paste0("results/forecast/fitting_national_forecast",i,".Rdata"))
+  final_time <- stan_data_national$N
+  fit <- fit_national
   est_Rt_disc <- fit$draws("Rt",format="matrix")
-  data_est_Rt_disc <- data.frame(est_Rt_disc_mean = colMeans(est_Rt_disc[,(((i-1)*final_time)+1):(i*final_time)]),
-                                 Rt_disc_min_1 = colQuantiles(est_Rt_disc[,(((i-1)*final_time)+1):(i*final_time)],prob=0.025),
-                                 Rt_disc_max_1 = colQuantiles(est_Rt_disc[,(((i-1)*final_time)+1):(i*final_time)],prob=0.975),
-                                 Rt_disc_min_2 = colQuantiles(est_Rt_disc[,(((i-1)*final_time)+1):(i*final_time)],prob=0.25),
-                                 Rt_disc_max_2 = colQuantiles(est_Rt_disc[,(((i-1)*final_time)+1):(i*final_time)],prob=0.75),
+  data_est_Rt_disc <- data.frame(est_Rt_disc_mean = colMeans(est_Rt_disc),
+                                 Rt_disc_min_1 = colQuantiles(est_Rt_disc,prob=0.025),
+                                 Rt_disc_max_1 = colQuantiles(est_Rt_disc,prob=0.975),
+                                 Rt_disc_min_2 = colQuantiles(est_Rt_disc,prob=0.25),
+                                 Rt_disc_max_2 = colQuantiles(est_Rt_disc,prob=0.75),
                                  time = 1 : final_time)
+  
+ data_est_Rt_disc <- data_est_Rt_disc %>%
+    filter(time <= 350)
 
    data_Rt_disc_95 <- data.frame(time = data_est_Rt_disc$time, Rt_disc_min = data_est_Rt_disc$Rt_disc_min_1,
                             Rt_disc_max = data_est_Rt_disc$Rt_disc_max_1, key = rep("nintyfive", length(data_est_Rt_disc$time)))
@@ -59,11 +65,11 @@ for (i in 1:M_regions){
 #---------------------------
 
   est_inf_disc <- fit$draws("infection",format="matrix")       #fit_disconnected$draws("infection", format = "matrix")
-  data_est_inf_disc <- data.frame(est_inf_disc_mean = colMeans(est_inf_disc[,(((i-1)*final_time)+1):(i*final_time)]),
-                                   inf_disc_min_1 = colQuantiles(est_inf_disc[,(((i-1)*final_time)+1):(i*final_time)],prob=0.025),
-                                   inf_disc_max_1 = colQuantiles(est_inf_disc[,(((i-1)*final_time)+1):(i*final_time)],prob=0.975),
-                                   inf_disc_min_2 = colQuantiles(est_inf_disc[,(((i-1)*final_time)+1):(i*final_time)],prob=0.25),
-                                   inf_disc_max_2 = colQuantiles(est_inf_disc[,(((i-1)*final_time)+1):(i*final_time)],prob=0.75),
+  data_est_inf_disc <- data.frame(est_inf_disc_mean = colMeans(est_inf_disc), #[,(((i-1)*final_time)+1):(i*final_time)]
+                                   inf_disc_min_1 = colQuantiles(est_inf_disc,prob=0.025),
+                                   inf_disc_max_1 = colQuantiles(est_inf_disc,prob=0.975),
+                                   inf_disc_min_2 = colQuantiles(est_inf_disc,prob=0.25),
+                                   inf_disc_max_2 = colQuantiles(est_inf_disc,prob=0.75),
                                    time = 1 : final_time)
 
   data_inf_disc_95 <- data.frame(time = data_est_inf_disc$time, inf_disc_min = data_est_inf_disc$inf_disc_min_1,
@@ -87,6 +93,8 @@ for (i in 1:M_regions){
                                 Rt_con_min_2 = colQuantiles(est_Rt_con[,(((i-1)*final_time)+1):(i*final_time)],prob=0.25),
                                 Rt_con_max_2 = colQuantiles(est_Rt_con[,(((i-1)*final_time)+1):(i*final_time)],prob=0.75),
                                 time = 1 : final_time)
+  data_est_Rt_con <- data_est_Rt_con %>%
+    filter(time <= 350)
 
  data_Rt_con_95 <- data.frame(time = data_est_Rt_con$time, Rt_con_min = data_est_Rt_con$Rt_con_min_1,
                             Rt_con_max = data_est_Rt_con$Rt_con_max_1, key = rep("nintyfive", length(data_est_Rt_con$time)))
@@ -123,22 +131,23 @@ for (i in 1:M_regions){
 
 #---------- plot ------------------------------------------------------------------------------------------------
 
-colors_rt <- c("Estimated \ndisconnected Rt" = "steelblue2", "Estimated \nconnected Rt" = "lightsalmon", "Simulated Rt"="black")
+colors_rt <- c("Estimated \ndisconnected Rt" = "#e34a33", "Estimated \nconnected Rt" = "lightsalmon", "True Rt"="black")
 colors_incidence <- c("Estimated disconnected\nincidence" = "red4", "Estimated connected\nincidence" = "green4", "Simulated\nincidence"="coral3")
  
 plot_rt <- ggplot(data_est_Rt_disc)+
   
   geom_ribbon(data = data_Rt_disc, aes(x = time, ymin = Rt_disc_min, ymax = Rt_disc_max, fill=key1))+
-  geom_ribbon(data = data_Rt_con, aes(x = time, ymin = Rt_con_min, ymax = Rt_con_max, fill=key1))+
-  geom_line(data = data_est_Rt_disc, aes(x = time,y = est_Rt_disc_mean, color = "Estimated \ndisconnected Rt"), linewidth = 1.4)+
-  geom_line(data = data_est_Rt_con, aes(x = time, y = est_Rt_con_mean, color = "Estimated \nconnected Rt"), linewidth = 1.5)+
-  geom_line(data = true_Rt, aes(x = index, y = !!sym(paste0("Rt_",i)), color = "Simulated Rt"), linewidth = 1 )+
+  # geom_ribbon(data = data_Rt_con, aes(x = time, ymin = Rt_con_min, ymax = Rt_con_max, fill=key1))+
+  geom_line(data = data_est_Rt_disc, aes(x = time,y = est_Rt_disc_mean, color = "Estimated \ndisconnected Rt"), linewidth = 1.3)+
+  # geom_line(data = data_est_Rt_con, aes(x = time, y = est_Rt_con_mean, color = "Estimated \nconnected Rt"), linewidth = 1)+
+  geom_line(data = true_Rt, aes(x = index, y = !!sym(paste0("Rt_",i)), color = "True Rt"), linewidth = 1.1 )+
   geom_line(data = Rt_threshold, aes(x=time, y = Rt),color = "black")+
+  # geom_vline(xintercept = 350, linetype = "dashed", color = "red")+
   xlab("Day")+
   ylab("")+
   scale_fill_manual(name = "",
-                    values = c("95% CI of \nestimated\ndisconnected Rt" = alpha("steelblue2", 0.25),
-                               "95% CI of \nestimated\nconnectded Rt" = alpha("lightsalmon", 0.25))) +
+                    values = c("95% CI of \nestimated\ndisconnected Rt" = alpha("#e34a33", 0.25)))+
+                               # "95% CI of \nestimated\nconnectded Rt" = alpha("lightsalmon", 0.25))) +
   scale_color_manual(values = colors_rt)+
   ggtitle(paste("Region",i))+
   theme_bw()+
@@ -222,7 +231,7 @@ rt3 <- rt3 + theme(legend.position = "none")
 #   nrow = 1, rel_widths = c(1.08, 1, 1, 0.6), labels = c("(d)","(e)","(f)",""),label_fontface = "plain",label_size = 25,
 #   label_x = c(0.14,0.1,0.1,0.01),label_y = c(1.08,1.08,1.08,1))
 
-p <- plot_grid(rt1,rt2,rt3,legend_rt, nrow = 1, rel_widths =  c(1, 0.85, 0.85,0.5))
+p <- plot_grid(rt1, rt2, rt3, legend_rt, nrow = 1, rel_widths =  c(1, 0.85, 0.85,0.5))
 p <- p + theme(plot.background = element_rect(fill = "white", color = NA))
 print(p)
 
@@ -329,3 +338,20 @@ print(p)
 #   guides(fill=guide_legend(ncol=1))
 # print(plot_inf)
 # 
+
+#--- plot mobility ---------------------------------------------------------
+regions <- c("Region1","Region2","Region3")
+mobility <- matrix(c(0.7, 0.15, 0.15, 0.07, 0.85, 0.08, 0.21, 0.09, 0.7), nrow=3, ncol=3) 
+mobility_df <- melt(mobility)
+colnames(mobility_df) <- c("X", "Y", "Value")
+mobility_df$X <- factor(mobility_df$X, labels = regions)
+mobility_df$Y <- factor(mobility_df$Y, labels = regions)
+ggplot(mobility_df, aes(x = X, y = Y, fill = Value)) +
+  geom_tile() +  # Create the heatmap
+  geom_text(aes(label = sprintf("%.2f", Value)), color = "black", size = 5) +  # Add values inside the tiles
+  scale_fill_gradient(low = "white", high = "steelblue") +  # Color gradient for the values
+  theme_minimal() +
+  labs(x = "", y = "", fill = "Value") +  # Axis and legend labels
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, size = 12),  # Rotate x-axis labels and set size
+        axis.text.y = element_text(size = 12))  # Set y-axis text size
+
