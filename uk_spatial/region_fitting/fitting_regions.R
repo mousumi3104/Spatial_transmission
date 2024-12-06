@@ -25,8 +25,8 @@ m <- cmdstan_model("fitting_regions.stan")
 
 fit_connected <- m$sample(
   data=stan_data_connected,
-  iter_sampling = 500,
-  iter_warmup =1200,
+  iter_sampling = 100,
+  iter_warmup =400,
   parallel_chains = 4,
   chains=4, 
   thin=1,
@@ -44,32 +44,36 @@ fit_connected <- m$sample(
 # out <- fit_connected$draws(format = "matrix")
 summary_fit_connected <- fit_connected$summary()
 # save(fit_connected,stan_data_connected,file=paste0('region_connceted_rt.Rdata'))
-save(fit_connected,stan_data_connected,file=paste0('results/region_connected_rt_double_mob_xyz.Rdata'))
+save(fit_connected,stan_data_connected,file=paste0('results/region_connected_rt.Rdata'))
 
 # #-------- disconnected_rt ---------------------------------------------------------------------
-# stan_data_disconnected <- stan_data_connected
-# stan_data_disconnected$C_base = stan_data_connected$C_lockdown
+stan_data_disconnected <- stan_data_connected
+stan_data_disconnected$C_base = stan_data_connected$C_lockdown
 # 
 # # Sys.setenv(STAN_NUM_THREADS = 2)
 # m <- cmdstan_model("fitting_regions.stan")#,cpp_options = list(stan_threads = TRUE))
 # 
-# fit_disconnected <- m$sample(
-#   data=stan_data_disconnected,
-#   iter_sampling = 800,
-#   iter_warmup =2000, 
-#   parallel_chains = 4,
-#   # threads_per_chain = 2,
-#   chains=4,
-#   thin=1, 
-#   seed=1234,
-#   refresh = 40,
-#   adapt_delta = 0.99, 
-#   max_treedepth = 10)    
+fit_disconnected <- m$sample(
+  data=stan_data_disconnected,
+  iter_sampling = 100,
+  iter_warmup =500,
+  parallel_chains = 4,
+  # threads_per_chain = 2,
+  chains=4,
+  thin=1,
+  seed=1234,
+  refresh = 40,
+  adapt_delta = 0.9,
+  max_treedepth = 12,init = \() list(mu = rep(3.28,M_regions), 
+                                     initial_seeding = rep(5,M_regions),
+                                     tau = 0.01,
+                                     phi = 20,
+                                     gamma = 0.5))
 
 # # out <-  fit_disconnected$draws(format = "matrix")
-# summary_fit_disconnected <- fit_disconnected$summary()
+summary_fit_disconnected <- fit_disconnected$summary()
 # # save(fit_disconnected,stan_data_disconnected,file=paste0('region_disconnceted_rt.Rdata'))
-# save(fit_disconnected,stan_data_disconnected,file=paste0('results/region_disconnected_rt_wo_gmob.Rdata'))
+save(fit_disconnected,stan_data_disconnected,file=paste0('results/region_disconnected_rt.Rdata'))
 # 
 # source("plot_region_fitting.R")
 # 

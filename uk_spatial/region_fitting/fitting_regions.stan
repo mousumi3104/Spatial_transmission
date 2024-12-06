@@ -56,9 +56,11 @@ transformed parameters{
    matrix[ final_time, M_regions] Rt;   //reproduction number
     
    //-------------------------------------------------------------------------------------------------//
+   {
    matrix[final_time, M_regions] SI_regions = rep_matrix(SI_rev,M_regions);  // serial interval for every region
    matrix[final_time, M_regions] f_regions = rep_matrix(f_rev,M_regions);    // infection to death distribution for every region
-    
+   }
+   
    for (m in 1:M_regions){                  // for initial seeding
       infection[1:initial_seeding_day,m] = rep_vector(initial_seeding[m], initial_seeding_day);  //initial_seeding[m]
       weekly_effect[:,m] = weekly_var * cumulative_sum(weekly_effect_d[:,m]);

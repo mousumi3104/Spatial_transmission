@@ -18,16 +18,11 @@ data {
   int<lower =1> N;
   int<lower=1> initial_seeding_day;
   int<lower=1> data_length;
-  // array[data_length,M_regions] int<lower =0> data_deaths;       //number of infected individual at any time
   array[data_length,M_regions] int<lower =0> data_inf;       //number of infected individual at any time
-  // array[data_length,M_regions] int<lower =0> data_cases;
-  // matrix[final_time, M_regions+1] cases;
   vector[N] SI;
-  // vector[N] f1;
-  // vector[N] f2;
   vector[M_regions] pop;
   int fitting_start;
-  int prediction_horizon;
+  // int prediction_horizon;
 }
 
 transformed data {
@@ -102,13 +97,13 @@ model {
   }
 }
 
-generated quantities{
-  array[prediction_horizon, M_regions] real<lower=0> infection_forecast;     // daily initialization
-  if (prediction_horizon >0){
-    for (tt in 1:prediction_horizon){
-      for (mm in 1:M_regions){
-        infection_forecast[tt,mm] = poisson_rng(infection[final_time+tt, mm]);
-      }
-    }
-  }
-}
+// generated quantities{
+//   array[prediction_horizon, M_regions] real<lower=0> infection_forecast;     // daily initialization
+//   if (prediction_horizon >0){
+//     for (tt in 1:prediction_horizon){
+//       for (mm in 1:M_regions){
+//         infection_forecast[tt,mm] = poisson_rng(infection[final_time+tt, mm]);
+//       }
+//     }
+//   }
+// }

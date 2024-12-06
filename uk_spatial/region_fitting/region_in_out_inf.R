@@ -21,6 +21,8 @@ library(this.path)
 script_directory <- this.path::this.dir()
 setwd(script_directory)
 
+# this is only for Rt and infection plot 
+
 load("results/region_connected_rt_xyz.Rdata")
 load("data/final_pop_2020_ltla.Rdata")
 
@@ -118,7 +120,8 @@ death_data <- data.frame(death_mean = rowMeans(weekly_deaths),
                          death_max1 = rowQuantiles(weekly_deaths, prob = 0.95))
 
 
-for (m in 1:M_regions){
+# for (m in 1:M_regions){
+m=7
   
   plot_infection <- infection_data[(((m-1)*final_time)+1):(m*final_time),]
   plot_infection$time <- seq(from=inf_start_date ,to =  end_date, by = "day")
@@ -155,71 +158,114 @@ for (m in 1:M_regions){
   data_inf <- rbind(data_inf_95, data_inf_in_own_95, data_inf_in_mob_95, data_inf_out_mob_95)
   data_inf$key <- factor(data_inf$key, levels = c("95% CI of total infection", "95% CI of infection in own", "95% CI of infection in mob","95% CI of infection out mob"))
   
-  total_inf_out_mob <- 
-  total_inf_in_mob <- 
-  total_inf_in_own <-  plot_inf_in_own 
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  colors_infection <- c("Total infection" = "red4", "Infections driven by \nlocal infections" = "green4", "Mobility induced \ninfections within region"="coral3", "Mobility induced \ninfections outside region" = "blue4")
-  
-  plot_inf <- ggplot(data_inf)+
-    geom_ribbon(aes(x = time, ymin = inf_min, ymax = inf_max, fill = key), alpha =0.25,show.legend = FALSE)+
-    geom_line(data = plot_infection, aes(x = time, y = inf_mean, color = "Total infection"), linewidth = 1.3)+
-    geom_line(data = plot_inf_in_own, aes(x = time, y = inf_mean, color = "Infections driven by \nlocal infections"), linewidth = 1.3)+
-    geom_line(data = plot_inf_in_mob, aes(x = time, y = inf_mean, color = "Mobility induced \ninfections within region"), linewidth = 1.3)+
-    geom_line(data = plot_inf_out_mob, aes(x = time, y = inf_mean, color = "Mobility induced \ninfections outside region"), linewidth = 1.3)+
-    geom_vline(xintercept = as.Date(c(first_lockdown_start,first_lockdown_end,second_lockdown_start,second_lockdown_end)), linetype = "dashed", color = "black", linewidth = 1)+
-    
-    xlab("")+
-    ylab("Daily infection")+
-    # scale_fill_manual(name = "",
-    #                   values = c("95% CI of total infection" = alpha("red4", 0.25),
-    #                              "95% CI of infection in own" = alpha("green4", 0.25),
-    #                              "95% CI of infection in mob" = alpha("coral3", 0.25),
-    #                              "95% CI of infection out mob" = alpha("blue4", 0.25))) +
-    scale_color_manual(values = colors_infection)+
-    scale_x_date(date_labels = "%b %y", date_breaks = "1 month") + 
-    ggtitle(regions[m])+
-    theme_bw()+
-    theme(axis.text.x = element_text(angle = 50,hjust = 0.4, vjust = 0.4,size = 17,color="black"),
-          axis.text.y = element_text(size = 20,margin = margin(r=10),color="black"),
-          axis.title.y = element_text(size = 20, margin=margin(r=10)),
-          axis.title.x = element_text(size = 20, margin=margin(r=10)),
-          plot.title = element_text(size=20, margin = margin(l = 15,b=10),hjust = 0.5),
-          legend.position = "right",
-          legend.title = element_blank(),      # Increase legend title size
-          legend.text = element_text(size = 20),       # Increase legend text size
-          legend.key.size = unit(1.2, "cm"),
-          legend.spacing.y = unit(10, "cm"))+
-    guides(fill=guide_legend(ncol=1))
-  
-  assign(paste0("inf",m),plot_inf)
-}
+data_stack_plot <-  data.frame(in_mob = plot_inf_in_mob$inf_mean, in_own = plot_inf_in_own$inf_mean, out_mob = plot_inf_out_mob$inf_mean, time = plot_inf_in_mob$time)
 
-legend_inf <- get_legend(plot_inf) 
-plot_inf_list <-  list(inf1,inf2,inf3,inf4,inf5,inf6,inf7,inf8,inf9)
-for (i in 1:length(plot_inf_list)){
-  plot_inf_list[[i]] <- plot_inf_list[[i]] + theme(legend.position = "none")
-}
-p_inf <- plot_grid(do.call(plot_grid, c(plot_inf_list, nrow = 3, ncol = 3)), legend_inf, nrow = 1, rel_widths = c(4,1))
-p_inf <- p_inf + theme(plot.background = element_rect(fill = "white", color = NA))
-print(p_inf)
+data_stack_plot1 <- data.frame(
+  time = rep(data_stack_plot$time, times = 3),
+  types = factor(rep(c("in_own", "in_mob", "out_mob"), each = length(data_stack_plot$time)),levels = c("in_own", "in_mob", "out_mob")),
+  infections = c(data_stack_plot$in_own, data_stack_plot$in_mob, data_stack_plot$out_mob)
+)
 
-# ggsave(filename = paste0("figures/inf_due_mob_london.png"), plot = inf7, width=12, height=5, units="in")
+ggplot(data_stack_plot1, aes(x = time, y = infections, fill = types)) +
+  geom_area(position = "stack") + 
+  geom_line(data = plot_infection, aes(x=time, y=inf_mean), color = "red3",inherit.aes = FALSE,linewidth=1.3)+
+  geom_vline(xintercept = as.Date(c(first_lockdown_start,first_lockdown_end,second_lockdown_start,second_lockdown_end)), linetype = "dashed", color = "black", linewidth = 1)+
+  scale_x_date(date_labels = "%b %y", date_breaks = "1 month") + 
+  scale_fill_manual(values = c("in_own" = "#fdae61", "in_mob" = "#abdda4", "out_mob" = "#2c7bb6"),
+                    labels = c("Infections driven by \nown infections", "Mobility induced \ninfections within region", "Mobility induced infections \noutside the region") ) +
+  labs(
+    title = "Infections over time",
+    x = "",
+    y = "Number of infections"
+  ) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 50,hjust = 0.4, vjust = 0.4,size = 17,color="black"),
+        axis.text.y = element_text(size = 20,margin = margin(r=10),color="black"),
+        axis.title.y = element_text(size = 20, margin=margin(r=10)),
+        axis.title.x = element_text(size = 20, margin=margin(r=10)),
+        plot.title = element_text(size=20, margin = margin(l = 15,b=10),hjust = 0.5),
+        legend.position = "right",
+        legend.title = element_blank(),      # Increase legend title size
+        legend.text = element_text(size = 15),       # Increase legend text size
+        legend.key.size = unit(1.2, "cm"),
+        legend.spacing.y = unit(10, "cm"))+
+        
+        guides(fill=guide_legend(ncol=1))
+  
 
-
-
-
-
+# death data plot
+dates_2020 <- seq(from = as.Date("2020-01-01"), to = as.Date("2020-12-31"), by = "week")
+total_death_data <- data.frame(death = rowSums(death_data),time = dates_2020)
+ggplot(total_death_data, aes(x = time, y= death)) +
+  geom_bar(stat = "identity", fill = "steelblue") + 
+  geom_vline(xintercept = as.Date(c(first_lockdown_start,first_lockdown_end,second_lockdown_start,second_lockdown_end)), linetype = "dashed", color = "black", linewidth = 1)+
+    labs(
+    title = "England",
+    x = "",
+    y = "Number of weekly deaths"
+  ) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 50,hjust = 0.4, vjust = 0.4,size = 17,color="black"),
+        axis.text.y = element_text(size = 20,margin = margin(r=10),color="black"),
+        axis.title.y = element_text(size = 20, margin=margin(r=10)),
+        axis.title.x = element_text(size = 20, margin=margin(r=10)),
+        plot.title = element_text(size=20, margin = margin(l = 15,b=10),hjust = 0.5),
+        legend.position = "right",
+        legend.title = element_blank(),      # Increase legend title size
+        legend.text = element_text(size = 15),       # Increase legend text size
+        legend.key.size = unit(1.2, "cm"),
+        legend.spacing.y = unit(10, "cm"))+
+  
+  guides(fill=guide_legend(ncol=1))
+  
+#   colors_infection <- c("Total infection" = "red4", "Infections driven by \nlocal infections" = "green4", "Mobility induced \ninfections within region"="coral3", "Mobility induced \ninfections outside region" = "blue4")
+#   
+#   plot_inf <- ggplot(data_inf)+
+#     geom_ribbon(aes(x = time, ymin = inf_min, ymax = inf_max, fill = key), alpha =0.25,show.legend = FALSE)+
+#     geom_line(data = plot_infection, aes(x = time, y = inf_mean, color = "Total infection"), linewidth = 1.3)+
+#     geom_line(data = plot_inf_in_own, aes(x = time, y = inf_mean, color = "Infections driven by \nlocal infections"), linewidth = 1.3)+
+#     geom_line(data = plot_inf_in_mob, aes(x = time, y = inf_mean, color = "Mobility induced \ninfections within region"), linewidth = 1.3)+
+#     geom_line(data = plot_inf_out_mob, aes(x = time, y = inf_mean, color = "Mobility induced \ninfections outside region"), linewidth = 1.3)+
+#     geom_vline(xintercept = as.Date(c(first_lockdown_start,first_lockdown_end,second_lockdown_start,second_lockdown_end)), linetype = "dashed", color = "black", linewidth = 1)+
+#     
+#     xlab("")+
+#     ylab("Daily infection")+
+#     # scale_fill_manual(name = "",
+#     #                   values = c("95% CI of total infection" = alpha("red4", 0.25),
+#     #                              "95% CI of infection in own" = alpha("green4", 0.25),
+#     #                              "95% CI of infection in mob" = alpha("coral3", 0.25),
+#     #                              "95% CI of infection out mob" = alpha("blue4", 0.25))) +
+#     scale_color_manual(values = colors_infection)+
+#     scale_x_date(date_labels = "%b %y", date_breaks = "1 month") + 
+#     ggtitle(regions[m])+
+#     theme_bw()+
+#     theme(axis.text.x = element_text(angle = 50,hjust = 0.4, vjust = 0.4,size = 17,color="black"),
+#           axis.text.y = element_text(size = 20,margin = margin(r=10),color="black"),
+#           axis.title.y = element_text(size = 20, margin=margin(r=10)),
+#           axis.title.x = element_text(size = 20, margin=margin(r=10)),
+#           plot.title = element_text(size=20, margin = margin(l = 15,b=10),hjust = 0.5),
+#           legend.position = "right",
+#           legend.title = element_blank(),      # Increase legend title size
+#           legend.text = element_text(size = 20),       # Increase legend text size
+#           legend.key.size = unit(1.2, "cm"),
+#           legend.spacing.y = unit(10, "cm"))+
+#     guides(fill=guide_legend(ncol=1))
+#   
+#   assign(paste0("inf",m),plot_inf)
+# }
+# 
+# legend_inf <- get_legend(plot_inf) 
+# plot_inf_list <-  list(inf1,inf2,inf3,inf4,inf5,inf6,inf7,inf8,inf9)
+# for (i in 1:length(plot_inf_list)){
+#   plot_inf_list[[i]] <- plot_inf_list[[i]] + theme(legend.position = "none")
+# }
+# p_inf <- plot_grid(do.call(plot_grid, c(plot_inf_list, nrow = 3, ncol = 3)), legend_inf, nrow = 1, rel_widths = c(4,1))
+# p_inf <- p_inf + theme(plot.background = element_rect(fill = "white", color = NA))
+# print(p_inf)
+# 
+# # ggsave(filename = paste0("figures/inf_due_mob_london.png"), plot = inf7, width=12, height=5, units="in")
+# 
+# 
+# 
+# 
+# 

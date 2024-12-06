@@ -1,12 +1,13 @@
 stan_data_arrangements <- function(death_threshold, script_directory){
 
 setwd(script_directory) 
-load("data/final_pop_2020_ltla.Rdata")
-load("data/england_death_2020.Rdata")       ## weekly data
+load("data/final_pop_2020_ltla.Rdata") 
+load("data/england_death_2020.Rdata")       
 load("data/uk_regions_mobility_matrix.Rdata")
 
 #-------- death data rrangements -------------------------------------------------------
 #------- regions index -----------------------------------------------------------------
+
 pop_2020$region <- sapply(pop_2020$region, function(x){
   paste0(toupper(substring(x,1,1)),tolower(substring(x,2)))})
 
@@ -22,6 +23,8 @@ south_west_index <- which(pop_2020$region == "South west")
 
 #-------- region wise death --------------------------------------------------------------
 
+death_data <- death_data %>% select(all_of(pop_2020$area_name))  
+
 death_regions <- data.frame(north_east = apply(death_data[,north_east_index],1,sum),
                             north_west = apply(death_data[,north_west_index],1,sum),
                             yorkshire = apply(death_data[,yorkshire_index],1,sum),
@@ -33,9 +36,7 @@ death_regions <- data.frame(north_east = apply(death_data[,north_east_index],1,s
                             south_west = apply(death_data[,south_west_index],1,sum))
 
 
-
-death_data <- death_data %>% select(all_of(pop_2020$area_name))  
-death_regions$total_death <- apply(death_data,1, sum)
+death_regions$total_death <- apply(death_regions,1, sum)
 
 #--------- start date of the epidemic ----------------------------------------------------------
 fitting_death_start <- which(cumsum(death_regions$total_death) > death_threshold )[1]       # week when cumulative death exceeds above 10
@@ -91,8 +92,24 @@ fitting_death_start <- infection_gen_time + 1
 
 #--------------- google mobility -----------------------------------------------------------------------------
 
-mobility_change <- readRDS("data/mobility_change.rds")  
-mobility_change <- mobility_change %>%
+mobility_change <- readRDS("data/mobility_change.rds") 
+
+# mobility_2020 <- read.csv("data/2020_GB_Region_Mobility_Report.csv")
+# gmob_area_name <- data.frame(area = unique(mobility_change$area_name), index = 1:length(unique(mobility_change$area_name)))
+# pop_area_name <- data.frame(area=pop_2020$area_name)
+# 
+# area_distance_matrix <- stringdistmatrix(gmob_area_name$area,pop_area_name$area, method = "jw")
+# matches <- expand.grid(Name1 = gmob_area_name$area, Name2 = pop_area_name$area)
+# matches$Distance <- as.vector(area_distance_matrix)
+# 
+# similar_matches <- matches[matches$Distance < 0.12, ]
+# similar_matches <- similar_matches %>% left_join(pop_2020, by = c("Name2" = "area_name"))
+# 
+# gmob_area_name$pop <- NA
+# gmob_area_name <- gmob_area_name %>% left_join(similar_matches, by = c("area" = "Name1")) %>%
+#                                     mutate(pop = population) %>% select(-population)
+
+mobility_change_area <- mobility_change %>%
   group_by(area_name, date, region) %>%
   summarize(avg_retail_and_recreation_percent_change_from_baseline = mean(retail_and_recreation_percent_change_from_baseline, na.rm = TRUE),
             ave_grocery_and_pharmacy_percent_change_from_baseline = mean(grocery_and_pharmacy_percent_change_from_baseline, na.rm = TRUE),
@@ -100,7 +117,7 @@ mobility_change <- mobility_change %>%
             ave_transit_stations_percent_change_from_baseline = mean(transit_stations_percent_change_from_baseline, na.rm = TRUE),
             ave_workplaces_percent_change_from_baseline = mean(workplaces_percent_change_from_baseline, na.rm = TRUE))
 
-mobility_change_region <- mobility_change %>%
+mobility_change_region <- mobility_change_area %>%
   group_by(region, date) %>%
   summarize(avg_retail_and_recreation_percent_change_from_baseline = mean(avg_retail_and_recreation_percent_change_from_baseline, na.rm = TRUE),
             ave_grocery_and_pharmacy_percent_change_from_baseline = mean(ave_grocery_and_pharmacy_percent_change_from_baseline, na.rm = TRUE),

@@ -1,3 +1,5 @@
+#infection data from a poisson process with the mean of simulated infected data
+
 library(cmdstanr)
 library(data.table)
 library(lubridate)
@@ -16,13 +18,14 @@ library(matrixStats)
 library(cowplot)
 library(this.path)
 
+rm(list = ls())
 script_directory <- this.path::this.dir()
 setwd(script_directory)
 
 #--------------------------------------------------------------------------------------------------------
 M_regions <- 3 # nolint
 week <- 7
-final_time <- 50 * week
+final_time <- 70 * week
 prediction_horizon <- 0
 N <- final_time + prediction_horizon
 pop <- c(20000000, 10000000, 15000000)
@@ -161,13 +164,13 @@ labs(title = "Rt Values Over Time",
       color = "Rt Type") +
 theme_minimal()
 
-inf_data <- infection_out_mob_data#daily_infection_data
+inf_data <- daily_infection_data
 inf_data$index <- 1:nrow(inf_data)
 inf_datalong <- inf_data %>% pivot_longer(cols = starts_with("Region"), names_to = "variable", values_to = "value")
 
 ggplot(inf_datalong, aes(x = index, y = value, color = variable)) +
 geom_point() +
-labs(title = "Daily_infection over time",
+labs(title = "Daily infection over time",
       x = "Time (day)",
       y = "Daily infection",
       color = "Region Type") +
@@ -179,7 +182,7 @@ save(Rt,daily_infection_data,file = "data/simulated_data.Rdata")
 #------------ fitting with connected model ----------------------------------------------------------------
 #----------------------------------------------------------------------------------------------------------
 
-fitting_start <- 10
+fitting_start <- 7#initial_seeding_day +1 #why it is 10??? not the initial seeding days..
 data_infection <- floor(as.matrix(daily_infection_data[, 1:M_regions]))
 len_data <- nrow(daily_infection_data)
 
@@ -193,55 +196,53 @@ stan_data_connected <- list(M_regions = M_regions,
                           N = N,
                           initial_seeding_day = initial_seeding_day,
                           data_length = len_data,
-#                           # data_deaths = data_deaths,
                           data_inf = data_infection,
-#                           # data_cases = data_cases,
                           SI = si,
                           # f1 = f1, f2 = f2,
                           pop = pop,
-                          fitting_start = fitting_start,
-                          prediction_horizon = prediction_horizon)
+                          fitting_start = fitting_start)
+
+                          #prediction_horizon = prediction_horizon)
 
 m <- cmdstan_model("simulated_fitting_region.stan")
 
 fit_connected <-  m$sample(
   data=stan_data_connected,
-  iter_sampling = 500,
-  iter_warmup = 1200,
+  iter_sampling = 400,
+  iter_warmup = 500,
   parallel_chains = 4,
   chains=4,
   thin=1,
   seed=12345,
   refresh = 40,
   adapt_delta = 0.8,
-  max_treedepth = 14,
-  init = \() list(init_R = c(0,0,0), rw_sd = 0.01))
+  max_treedepth = 10,
+  init = \() list(init_R = c(1,1,1.5), rw_sd = 0.01))
 # 
 summary_fit_connected <- fit_connected$summary()
 
-save(fit_connected,stan_data_connected, file=paste0("data/",'connected_region_fitting_forecast.Rdata'))
+save(fit_connected,stan_data_connected, file=paste0("results/connected_region_fitting.Rdata"))
 
 #----------------------------------------------------------------------------------------------------------------------
 #--------------- fitting separately (without mobility) ----------------------------------------------------------------
 #----------------------------------------------------------------------------------------------------------------------
 
-# C <- matrix(c(1, 0, 0, 0, 1, 0, 0, 0, 1), nrow=3, ncol=3) 
-# len_data <- nrow(data_infection)
+C <- matrix(c(1, 0, 0, 0, 1, 0, 0, 0, 1), nrow=3, ncol=3)
+len_data <- nrow(data_infection)
 
 
-# M_regions <- 3
-# stan_data_connected <- list(M_regions = M_regions,
-#                             C = C,
-#                             final_time = final_time,
-#                             initial_seeding_day = initial_seeding_day,
-#                             data_length = len_data,
-#                             #                           # data_deaths = data_deaths,
-#                             data_inf = data_infection,
-#                             #                           # data_cases = data_cases,
-#                             SI = si,
-#                             f1 = f1, f2 = f2,
-#                             pop = pop,
-#                             fitting_start = fitting_start)
+M_regions <- 3
+stan_data_disconnected <- list(M_regions = M_regions,
+                               C = C,
+                               final_time = final_time,
+                               N = N,
+                               initial_seeding_day = initial_seeding_day,
+                               data_length = len_data,                        # data_deaths = data_deaths,
+                               data_inf = data_infection,                         # data_cases = data_cases,
+                               SI = si,
+                               pop = pop,
+                               fitting_start = fitting_start)
+                               #prediction_horizon = prediction_horizon)
 
 # for (i in 1:M_regions){
   # stan_data_separate <- list(final_time = final_time,
@@ -253,61 +254,61 @@ save(fit_connected,stan_data_connected, file=paste0("data/",'connected_region_fi
   #                         pop = pop[i],
   #                         fitting_start = fitting_start)
 
-  # fit_disconnected <-  m$sample(data=stan_data_connected,
-  #                               iter_sampling = 200, 
-  #                               iter_warmup = 1000, 
-  #                               parallel_chains = 4,
-  #                               chains=4,
-  #                               thin=1,
-  #                               seed=12345,
-  #                               refresh = 40,
-  #                               adapt_delta = 0.95,
-  #                               max_treedepth = 10)
+  fit_disconnected <-  m$sample(data=stan_data_disconnected,
+                                iter_sampling = 400,
+                                iter_warmup = 500,
+                                parallel_chains = 4,
+                                chains=4,
+                                thin=1,
+                                seed=12345,
+                                refresh = 40,
+                                adapt_delta = 0.8,
+                                max_treedepth = 10,init = \() list(init_R = c(1,1,1.5), rw_sd = 0.01))
   # 
-  # est_Rt <- fit_disconnected$draws("Rt",format = "matrix")
-  # est_inf <- fit_disconnected$draws("infection",format = "matrix")
+  est_Rt <- fit_disconnected$draws("Rt",format = "matrix")
+  est_inf <- fit_disconnected$draws("infection",format = "matrix")
 
   # assign(paste0("stan_data_separate_",i), stan_data_separate)
   # assign(paste0("fit_disconnected_",i), fit_disconnected)
-  # save( fit_disconnected, file=paste0("data/disconnected_region_fitting.Rdata"))
+  save( fit_disconnected,stan_data_disconnected, file=paste0("results/disconnected_region_fitting.Rdata"))
 
 
 #-----------------------------------------------------------------------------------------------------------------------
 #------------ national model fitting -----------------------------------------------------------------------------------
 #-----------------------------------------------------------------------------------------------------------------------
 
-aggregated_data <- rowSums(data_infection)
-m <- cmdstan_model("simulated_fitting_national.stan")
-
-
-for (i in 1:M_regions){
-stan_data_national <- list(final_time = final_time,
-                            N=N,
-                            initial_seeding_day = initial_seeding_day,
-                            data_length=len_data,
-                            data_fit = data_infection[,i],
-                            SI= si,
-                            pop = pop[i],
-                            fitting_start = fitting_start,
-                            prediction_horizon = prediction_horizon)
+# aggregated_data <- rowSums(data_infection)
+# m <- cmdstan_model("simulated_fitting_national.stan")
 # 
-fit_national <-  m$sample(
-  data=stan_data_national,
-  iter_sampling = 500,
-  iter_warmup = 1200,
-  parallel_chains = 4,
-  chains=4,
-  thin=1,
-  seed=12345,
-  refresh = 40,
-  adapt_delta = 0.8,
-  max_treedepth = 14,init = \() list(init_R = 0,rw_sd = 0.01))
-
-  summary_fit_national <- fit_national$summary()
-  save(fit_national, stan_data_national, file= paste0("data/fitting_national_forecast",i,".Rdata"))
-
-}
-
-
-
-
+# 
+# for (i in 1:M_regions){
+# stan_data_national <- list(final_time = final_time,
+#                             N=N,
+#                             initial_seeding_day = initial_seeding_day,
+#                             data_length=len_data,
+#                             data_fit = data_infection[,i],
+#                             SI= si,
+#                             pop = pop[i],
+#                             fitting_start = fitting_start,
+#                             prediction_horizon = prediction_horizon)
+# # 
+# fit_national <-  m$sample(
+#   data=stan_data_national,
+#   iter_sampling = 500,
+#   iter_warmup = 1200,
+#   parallel_chains = 4,
+#   chains=4,
+#   thin=1,
+#   seed=12345,
+#   refresh = 40,
+#   adapt_delta = 0.8,
+#   max_treedepth = 14,init = \() list(init_R = 0,rw_sd = 0.01))
+# 
+#   summary_fit_national <- fit_national$summary()
+#   save(fit_national, stan_data_national, file= paste0("data/fitting_national_forecast",i,".Rdata"))
+# 
+# }
+# 
+# 
+# 
+# 

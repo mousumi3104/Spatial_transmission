@@ -6,18 +6,16 @@ data {
   int<lower = 0> initial_seeding_day;
   array[M] int init_seed;       //initial seeding time    
   vector[final_time] SI;      //serial interval
-  vector[final_time] f1;      //infection ot observation distribution
-  vector[final_time] f2;
   matrix[final_time,M] Rt;
   matrix[M, M] C;                // mobility matrix
   //array[final_time] int<lower=0> day_week_index;
-  int week;
+  // int week;
 }
 
 transformed data {
   vector[final_time] SI_rev = reverse(SI);      //reverse of the SI (required for simulation)
-  vector[final_time] f1_rev = reverse(f1);       //reverse of the infection-death distribution
-  vector[final_time] f2_rev = reverse(f2);       //reverse of the infection-onset distribution
+  // vector[final_time] f1_rev = reverse(f1);       //reverse of the infection-death distribution
+  // vector[final_time] f2_rev = reverse(f2);       //reverse of the infection-onset distribution
 }
 
 parameters{
@@ -55,7 +53,7 @@ generated quantities{
       real ifr_noise = 1;//normal_rng(1,0.1);
       real sus = pop[i]-sum(infection[1:(t-1),i]);
   
-      infection[t,i] = dot_product(C[:,i]', (((rep_vector(sus , M) ./ eff_pop)' .* Rt[t,:]).* total_inf'));//);poisson_rng(
+      infection[t,i] = poisson_rng(dot_product(C[:,i]', (((rep_vector(sus , M) ./ eff_pop)' .* Rt[t,:]).* total_inf')));
       
       infection_in_own[t,i] = (sus * C[i,i] / eff_pop[i]) * Rt[t,i] * (C[i,i] * convolution_inf[i]) ;
       infection_in_mob[t,i] = (sus * C[i,i] / eff_pop[i]) * Rt[t,i] * (total_inf[i] - (C[i,i] * convolution_inf[i])) ;
@@ -68,10 +66,6 @@ generated quantities{
         }
       }
       infection_out_mob[t,i] = dot_product(C[index,i]', (((rep_vector(sus , M-1) ./ eff_pop[index])' .* Rt[t,index]).* total_inf[index]'));
-      
-      
-      
-      
       
       // daily_cases[t,i] = iar_noise * dot_product(infection[1:(t-1),i], tail(f2_rev,t-1));
       // daily_deaths[t,i] =  ifr_noise * dot_product(infection[1:(t-1),i], tail(f1_rev,t-1)); 

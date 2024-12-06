@@ -29,7 +29,7 @@ transformed data {
 
 generated quantities{
    
-   matrix[final_time, M_regions] infection;    // daily initialization
+   matrix[final_time, M_regions] infection;        // daily initialization
    matrix[final_time, M_regions] infection_in_own;
    matrix[final_time, M_regions] infection_in_mob ;
    matrix[final_time, M_regions] infection_out_mob;
