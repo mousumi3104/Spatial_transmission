@@ -2,14 +2,18 @@ stan_data_arrangements <- function(death_threshold, script_directory){
 
 setwd(script_directory) 
 load("data/final_pop_2020_ltla.Rdata") 
-load("data/england_death_2020.Rdata")       
+# load("data/england_death_2020.Rdata")       
 load("data/uk_regions_mobility_matrix.Rdata")
+death_data <- read_excel("data/death_20_21.xlsx")
 
-#-------- death data rrangements -------------------------------------------------------
+#-------- death data arrangements -------------------------------------------------------
 #------- regions index -----------------------------------------------------------------
 
 pop_2020$region <- sapply(pop_2020$region, function(x){
   paste0(toupper(substring(x,1,1)),tolower(substring(x,2)))})
+
+pop_2020$area_name <- sapply(pop_2020$area_name, function(x){
+  paste0(toupper(substring(x,1,1)), tolower(substring(x,2)))})
 
 north_east_index <- which(pop_2020$region == "North east")
 north_west_index <- which(pop_2020$region == "North west")
@@ -22,6 +26,9 @@ south_east_index <- which(pop_2020$region == "South east")
 south_west_index <- which(pop_2020$region == "South west")
 
 #-------- region wise death --------------------------------------------------------------
+# colnames(death_data) <- gsub("\\.", " ",colnames(death_data) )
+colnames(death_data) <- sapply(colnames(death_data), function(x){
+  paste0(toupper(substring(x,1,1)),tolower(substring(x,2)))})
 
 death_data <- death_data %>% select(all_of(pop_2020$area_name))  
 
@@ -44,7 +51,7 @@ infection_gen_time <- 6
 epidemic_start <- fitting_death_start - infection_gen_time
 inf_start_date <- ISOweek2date(paste0(2020, "-W", sprintf("%02d", epidemic_start), "-1"))
 fitting_start_date <- ISOweek2date(paste0(2020, "-W", sprintf("%02d", fitting_death_start), "-1"))
-inf_end_date <- as.Date("31-12-2020",format = "%d-%m-%Y")
+inf_end_date <- as.Date("31-01-2021",format = "%d-%m-%Y")
 # week_dates <- seq.Date(inf_start_date, inf_end_date, by = "week")
 final_time <- as.numeric(inf_end_date - inf_start_date) +1
 
@@ -92,48 +99,37 @@ fitting_death_start <- infection_gen_time + 1
 
 #--------------- google mobility -----------------------------------------------------------------------------
 
-mobility_change <- readRDS("data/mobility_change.rds") 
-
-# mobility_2020 <- read.csv("data/2020_GB_Region_Mobility_Report.csv")
-# gmob_area_name <- data.frame(area = unique(mobility_change$area_name), index = 1:length(unique(mobility_change$area_name)))
-# pop_area_name <- data.frame(area=pop_2020$area_name)
+mobility_change_region <- readRDS("data/gmobility_region.rds") 
+# mobility_change <- mobility_change %>% select(!c("residential_percent_change_from_baseline"))
 # 
-# area_distance_matrix <- stringdistmatrix(gmob_area_name$area,pop_area_name$area, method = "jw")
-# matches <- expand.grid(Name1 = gmob_area_name$area, Name2 = pop_area_name$area)
-# matches$Distance <- as.vector(area_distance_matrix)
+# mobility_change_area <- mobility_change %>%
+#   group_by(area_name, date, region) %>%
+#   summarize(avg_retail_and_recreation_percent_change_from_baseline = mean(retail_and_recreation_percent_change_from_baseline, na.rm = TRUE),
+#             ave_grocery_and_pharmacy_percent_change_from_baseline = mean(grocery_and_pharmacy_percent_change_from_baseline, na.rm = TRUE),
+#             ave_transit_stations_percent_change_from_baseline = mean(transit_stations_percent_change_from_baseline, na.rm = TRUE),
+#             ave_parks_percent_change_from_baseline = mean(ave_parks_percent_change_from_baseline, na.rm = TRUE),
+#             ave_workplaces_percent_change_from_baseline = mean(workplaces_percent_change_from_baseline, na.rm = TRUE))
 # 
-# similar_matches <- matches[matches$Distance < 0.12, ]
-# similar_matches <- similar_matches %>% left_join(pop_2020, by = c("Name2" = "area_name"))
-# 
-# gmob_area_name$pop <- NA
-# gmob_area_name <- gmob_area_name %>% left_join(similar_matches, by = c("area" = "Name1")) %>%
-#                                     mutate(pop = population) %>% select(-population)
-
-mobility_change_area <- mobility_change %>%
-  group_by(area_name, date, region) %>%
-  summarize(avg_retail_and_recreation_percent_change_from_baseline = mean(retail_and_recreation_percent_change_from_baseline, na.rm = TRUE),
-            ave_grocery_and_pharmacy_percent_change_from_baseline = mean(grocery_and_pharmacy_percent_change_from_baseline, na.rm = TRUE),
-            ave_parks_percent_change_from_baseline = mean(parks_percent_change_from_baseline, na.rm = TRUE),
-            ave_transit_stations_percent_change_from_baseline = mean(transit_stations_percent_change_from_baseline, na.rm = TRUE),
-            ave_workplaces_percent_change_from_baseline = mean(workplaces_percent_change_from_baseline, na.rm = TRUE))
-
-mobility_change_region <- mobility_change_area %>%
-  group_by(region, date) %>%
-  summarize(avg_retail_and_recreation_percent_change_from_baseline = mean(avg_retail_and_recreation_percent_change_from_baseline, na.rm = TRUE),
-            ave_grocery_and_pharmacy_percent_change_from_baseline = mean(ave_grocery_and_pharmacy_percent_change_from_baseline, na.rm = TRUE),
-            ave_parks_percent_change_from_baseline = mean(ave_parks_percent_change_from_baseline, na.rm = TRUE),
-            ave_transit_stations_percent_change_from_baseline = mean(ave_transit_stations_percent_change_from_baseline, na.rm = TRUE),
-            ave_workplaces_percent_change_from_baseline = mean(ave_workplaces_percent_change_from_baseline, na.rm = TRUE),.groups = "drop")
+# mobility_change_region <- mobility_change_area %>%
+#   group_by(region, date) %>%
+#   summarize(avg_retail_and_recreation_percent_change_from_baseline = mean(avg_retail_and_recreation_percent_change_from_baseline, na.rm = TRUE),
+#             ave_grocery_and_pharmacy_percent_change_from_baseline = mean(ave_grocery_and_pharmacy_percent_change_from_baseline, na.rm = TRUE),
+#             ave_transit_stations_percent_change_from_baseline = mean(ave_transit_stations_percent_change_from_baseline, na.rm = TRUE),
+#             ave_parks_percent_change_from_baseline = mean(ave_parks_percent_change_from_baseline, na.rm = TRUE),
+#             ave_workplaces_percent_change_from_baseline = mean(ave_workplaces_percent_change_from_baseline, na.rm = TRUE),.groups = "drop")
 
 mobility_change_region$date <- as.Date(mobility_change_region$date, format = "%Y-%m-%d")
+complete_dates <- seq(min(min(as.Date(mobility_change_region$date,format = "%Y-%m-%d")),as.Date(inf_start_date, format = "%Y-%m-%d")), as.Date(inf_end_date, format= "%Y-%m-%d"), by = "day")
 
-if (min(mobility_change_region$date) > inf_start_date){
-  new_dates <- seq.Date(from = inf_start_date, to = min(mobility_change_region$date) -1, by = "day")
+types_gmob <- 5
+
+if (min(mobility_change_region$date) > min(complete_dates)){
+  new_dates <- seq.Date(from = min(complete_dates), to = min(mobility_change_region$date) -1, by = "day")
   new_rows <- expand.grid(region = unique(mobility_change_region$region), date = new_dates)
   new_rows <- new_rows %>% mutate(avg_retail_and_recreation_percent_change_from_baseline = 0,
                                   ave_grocery_and_pharmacy_percent_change_from_baseline = 0,
-                                  ave_parks_percent_change_from_baseline = 0,
                                   ave_transit_stations_percent_change_from_baseline = 0,
+                                  ave_parks_percent_change_from_baseline = 0,
                                   ave_workplaces_percent_change_from_baseline = 0)
 }
 mobility_change_region <- rbind(new_rows, mobility_change_region)
@@ -141,17 +137,17 @@ desired_order_region <- pop_region$regions
 mobility_change_region$region <- factor(mobility_change_region$region, levels = desired_order_region)
 mobility_change_region <- mobility_change_region %>% arrange(region)
 
-gmobility <- array(NA, dim = c(final_time,5,M_regions))
+gmobility <- array(NA, dim = c(final_time, types_gmob, M_regions))   # five types of gmobility
 for (i in 1:M_regions){
-  gmobility[,,i] <- as.matrix(mobility_change_region[(((i-1)*(final_time))+1):(i*(final_time)),3:7])
+  gmobility[,,i] <- as.matrix(mobility_change_region[(((i-1)*(final_time))+1):(i*(final_time)),3:ncol(mobility_change_region)])
 }
 
 for (m in 1:M_regions) {
-  for (i in 1:5){
+  for (i in 1:4){
     for (t in 1:(final_time)){
       if (is.nan(gmobility[t,i,m])){
-        prev_val <- if (t > 1) gmobility[max(which(!is.nan(gmobility[1:(t-1),i,m] ))),i,m]
-        next_val <- if (t < final_time) gmobility[(min(which(!is.nan(gmobility[(t+1):final_time,i,m]))) + t),i,m]
+        prev_val <- if (t > 1) gmobility[max(which(!is.na(gmobility[1:(t-1),i,m] ))),i,m]
+        next_val <- if (t < final_time) gmobility[(min(which(!is.na(gmobility[(t+1):final_time,i,m]))) + t),i,m]
         gmobility[t,i,m] <- (prev_val + next_val)/2
       }
     }
@@ -160,7 +156,7 @@ for (m in 1:M_regions) {
 
 gm <- matrix(NA, nrow = final_time, ncol = M_regions)
 for (m in 1:M_regions){
-  gm[,m] = (gmobility[,1,m] + gmobility[,2,m] + gmobility[,3,m] + gmobility[,4,m] + gmobility[,5,m])/5;   
+  gm[,m] = (gmobility[,1,m] + gmobility[,2,m] + gmobility[,3,m] + gmobility[,4,m] +gmobility[,5,m])/5;   
 }
 
 # colors <- rainbow(M_regions)  # Generates M_regions distinct colors
@@ -175,7 +171,7 @@ lockdown1_lifted <- as.Date("2020-05-10", format = "%Y-%m-%d")
 lockdown2_started <- as.Date("2020-11-05", format = "%Y-%m-%d")  
 lockdown2_lifted <- as.Date("2020-12-02", format = "%Y-%m-%d") 
 
-lockdown_index <-  data.frame(date = seq.Date(from = inf_start_date,as.Date("2020-12-31",format = "%Y-%m-%d"),by="day"))
+lockdown_index <-  data.frame(date = seq.Date(from = inf_start_date,as.Date("2021-01-31",format = "%Y-%m-%d"),by="day"))
 lockdown_index$r_mobility_index <- rep(0,nrow(lockdown_index))
 lockdown_index$r_mobility_index[lockdown_index$date >= lockdown1_started & lockdown_index$date < lockdown1_lifted] <- 1
 lockdown_index$r_mobility_index[lockdown_index$date >= lockdown2_started & lockdown_index$date < lockdown2_lifted] <- 1
@@ -215,7 +211,10 @@ stan_data <- list(M_regions= M_regions,
                   I = as.matrix(lockdown_index),
                   first_lockdown_end = first_lockdown_end,
                   second_lockdown_end = second_lockdown_end,
-                  fitting_death_start = fitting_death_start)
+                  fitting_death_start = fitting_death_start,
+                  inf_start_date = inf_start_date,
+                  fitting_start_date = fitting_start_date,
+                  end_date = inf_end_date)
 
 return(stan_data)
 

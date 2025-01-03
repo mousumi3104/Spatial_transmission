@@ -13,7 +13,7 @@ f <- rep(0,final_time)
 
 f_cached <- ecdf(x1+x2)
 
-convolution <- function(u) (0.0103*f_cached(u))      # ifr is 0.0103.  # this is the ifr for uk from the code of swapnil's NPI nature
+convolution <- function(u) (0.0103*f_cached(u))      # ifr is 0.0103.  # this is the ifr for uk 
 f[1] = (convolution(1.5) - convolution(0))
 for(i in 2:final_time) {
   f[i] = (convolution(i+.5) - convolution(i-.5)) 

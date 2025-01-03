@@ -19,15 +19,24 @@ script_directory <- this.path::this.dir()
 setwd(script_directory)
 #-------------- loading data -------------------------------------------------------------------------
 
-source("data/stan_data_arrangements_daily.R")
-stan_data_connected <- stan_data_arrangements(death_threshold = 10, script_directory)
+source("data/data_arrangements_ne.R")
+stan_data_connected <- stan_data_arrangements(death_threshold = 4, script_directory)
+
+plot_required_date <- list(inf_start_date = stan_data_connected$inf_start_date,
+                           fitting_start_date = stan_data_connected$fitting_start_date,
+                           end_date = stan_data_connected$end_date)
+
+stan_data_connected$inf_start_date <- NULL
+stan_data_connected$fitting_start_date <- NULL
+stan_data_connected$end_date <- NULL
+
 M_regions <- stan_data_connected$M_regions
-m <- cmdstan_model("fitting_region_daily.stan")
+m <- cmdstan_model("ltla_fitting_ne.stan")
 
 fit_connected <- m$sample(
   data=stan_data_connected,
-  iter_sampling =200,
-  iter_warmup =800,
+  iter_sampling =500,
+  iter_warmup =1200,
   parallel_chains = 4,
   chains=4, 
   thin=1,
@@ -42,10 +51,18 @@ fit_connected <- m$sample(
                   gamma = 0.5))     # adapt_delta controls acceptance probability (lower -> larger step size, higher acceptance rate, less time, less explored posterior distribution
 # opposite for tigher adapt_delta)
 # default adapt_delta=0.80, max.treedepth = 10                                                              # max_treedepth is for time efficiency concern (higher -> more time)
-# out <- fit_connected$draws(format = "matrix")
+
 summary_fit_connected <- fit_connected$summary()
+out_rt <- fit_connected$draws("Rt",format = "matrix")
+Rt <- apply(out_rt,2,function(col) mean(col))
+out_inf <- fit_connected$draws("infection",format = "matrix")
+inf <- apply(out_inf,2,function(col) mean(col))
+out_death <- fit_connected$draws("weekly_deaths",format = "matrix")
+death <- apply(out_inf,2,function(col) mean(col))
+
 # save(fit_connected,stan_data_connected,file=paste0('region_connceted_rt.Rdata'))
-save(fit_connected,stan_data_connected,file=paste0('results/region_connected_rt.Rdata'))
+# save(fit_connected,stan_data_connected,plot_required_date, file=paste0('results/ltla_connected_ne.Rdata'))
+save(fit_connected,stan_data_connected,plot_required_date, file=paste0('results/ltla_connected_ne_jan.Rdata'))
 
 # #-------- disconnected_rt ---------------------------------------------------------------------
 stan_data_disconnected <- stan_data_connected
@@ -56,8 +73,8 @@ stan_data_disconnected$C_base = stan_data_connected$C_lockdown
 # 
 fit_disconnected <- m$sample(
   data=stan_data_disconnected,
-  iter_sampling = 50,
-  iter_warmup =300,
+  iter_sampling = 500,
+  iter_warmup =1200,
   parallel_chains = 4,
   # threads_per_chain = 2,
   chains=4,
@@ -71,12 +88,13 @@ fit_disconnected <- m$sample(
                                      phi = 20,
                                      gamma = 0.5))
 
-# # out <-  fit_disconnected$draws(format = "matrix")
+   # # out <-  fit_disconnected$draws(format = "matrix")
 summary_fit_disconnected <- fit_disconnected$summary()
 # # save(fit_disconnected,stan_data_disconnected,file=paste0('region_disconnceted_rt.Rdata'))
-save(fit_disconnected,stan_data_disconnected,file=paste0('results/region_disconnected_rt.Rdata'))
-# 
-# source("plot_region_fitting.R")
+# save(fit_disconnected,stan_data_disconnected,plot_required_date,file=paste0('results/ltla_disconnected_ne.Rdata'))
+save(fit_disconnected,stan_data_disconnected,plot_required_date,file=paste0('results/ltla_disconnected_ne_jan.Rdata'))
+
+source("plot_ltla_ne.R")
 # 
 # 
 # bayesplot::mcmc_trace(fit$draws(c("mu[1]","mu[2]","mu[3]")))

@@ -12,6 +12,7 @@ library(scales)
 library(bayesplot)
 library(ggplot2)
 library(ISOweek)
+library(readxl)
 library(this.path)
 # 
 script_directory <- this.path::this.dir()
@@ -20,13 +21,22 @@ setwd(script_directory)
 
 source("data/stan_data_arrangements.R")
 stan_data_connected <- stan_data_arrangements(death_threshold = 10, script_directory)
+
+plot_required_date <- list(inf_start_date = stan_data_connected$inf_start_date,
+                           fitting_start_date = stan_data_connected$fitting_start_date,
+                           end_date = stan_data_connected$end_date)
+
+stan_data_connected$inf_start_date <- NULL
+stan_data_connected$fitting_start_date <- NULL
+stan_data_connected$end_date <- NULL
+
 M_regions <- stan_data_connected$M_regions
 m <- cmdstan_model("fitting_regions.stan")
 
 fit_connected <- m$sample(
   data=stan_data_connected,
-  iter_sampling = 100,
-  iter_warmup =400,
+  iter_sampling = 500,
+  iter_warmup =1200,
   parallel_chains = 4,
   chains=4, 
   thin=1,
@@ -44,7 +54,7 @@ fit_connected <- m$sample(
 # out <- fit_connected$draws(format = "matrix")
 summary_fit_connected <- fit_connected$summary()
 # save(fit_connected,stan_data_connected,file=paste0('region_connceted_rt.Rdata'))
-save(fit_connected,stan_data_connected,file=paste0('results/region_connected_rt.Rdata'))
+save(fit_connected,stan_data_connected,plot_required_date,file=paste0('results/region_connected_rt_including_jan.Rdata'))
 
 # #-------- disconnected_rt ---------------------------------------------------------------------
 stan_data_disconnected <- stan_data_connected
@@ -55,8 +65,8 @@ stan_data_disconnected$C_base = stan_data_connected$C_lockdown
 # 
 fit_disconnected <- m$sample(
   data=stan_data_disconnected,
-  iter_sampling = 100,
-  iter_warmup =500,
+  iter_sampling = 500,
+  iter_warmup =1200,
   parallel_chains = 4,
   # threads_per_chain = 2,
   chains=4,
@@ -73,9 +83,9 @@ fit_disconnected <- m$sample(
 # # out <-  fit_disconnected$draws(format = "matrix")
 summary_fit_disconnected <- fit_disconnected$summary()
 # # save(fit_disconnected,stan_data_disconnected,file=paste0('region_disconnceted_rt.Rdata'))
-save(fit_disconnected,stan_data_disconnected,file=paste0('results/region_disconnected_rt.Rdata'))
+save(fit_disconnected,stan_data_disconnected,plot_required_date,file=paste0('results/region_disconnected_rt_including_jan.Rdata'))
 # 
-# source("plot_region_fitting.R")
+source("plot_region_fitting.R")
 # 
 # 
 # bayesplot::mcmc_trace(fit$draws(c("mu[1]","mu[2]","mu[3]")))

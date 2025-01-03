@@ -23,12 +23,12 @@ setwd(script_directory)
 
 # this is only for Rt and infection plot 
 
-load("results/region_connected_rt_xyz.Rdata")
+load("results/region_connected_rt.Rdata")
 load("data/final_pop_2020_ltla.Rdata")
 
-inf_start_date <- as.Date("27-01-2020",format = "%d-%m-%Y")
-fitting_start <- as.Date("09-03-2020", format = "%d-%m-%Y")
-end_date <- as.Date("31-12-2020", format = "%d-%m-%Y")
+inf_start_date <- plot_required_date$inf_start_date     #as.Date("27-01-2020",format = "%d-%m-%Y")
+fitting_start <- plot_required_date$fitting_start_date      #as.Date("09-03-2020", format = "%d-%m-%Y")
+end_date <- plot_required_date$end_date                 #as.Date("31-12-2020", format = "%d-%m-%Y")
 
 first_lockdown_start <- as.Date("2020-03-23", format = "%Y-%m-%d")
 first_lockdown_end <- as.Date("2020-05-10", format = "%Y-%m-%d")
@@ -45,12 +45,12 @@ fit <- fit_connected
 Rt_connected <- fit$draws("Rt",format ="matrix")  # need to arrange
 inf <- fit$draws("infection", format = "matrix")  # need to arrange
 initial_seeding <- fit$draws("initial_seeding", format="matrix")
-x1 <- fit$draws("x1", format ="matrix")
-y1 <- fit$draws("y1", format ="matrix")
-z1 <- fit$draws("z1", format ="matrix")
-mu <- fit$draws("mu", format ="matrix")
-weekly_var <- fit$draws("weekly_var", format = "matrix")
-weekly_effect_d <- fit$draws("weekly_effect_d", format = "matrix")  # need to arrange
+# x1 <- fit$draws("x1", format ="matrix")
+# y1 <- fit$draws("y1", format ="matrix")
+# z1 <- fit$draws("z1", format ="matrix")
+# mu <- fit$draws("mu", format ="matrix")
+# weekly_var <- fit$draws("weekly_var", format = "matrix")
+# weekly_effect_d <- fit$draws("weekly_effect_d", format = "matrix")  # need to arrange
 ifr_noise <- fit$draws("ifr_noise", format = "matrix")
 
 final_time <- stan_data_connected$final_time
@@ -65,7 +65,7 @@ infection_out_mob <- array(data = NA, dim = c(final_time*M_regions, no_sample))
 weekly_deaths <- array(data = NA, dim = c(ceiling(final_time/7)*M_regions, no_sample))
 
 m <- cmdstan_model("uk_region_simulation.stan")  
-ind <- sample(1:2000,no_sample)
+ind <- sample(1:800,no_sample)
 
 for (k in 1:no_sample){ 
     stan_data <- list(M_regions = stan_data_connected$M_regions,
@@ -120,13 +120,13 @@ death_data <- data.frame(death_mean = rowMeans(weekly_deaths),
                          death_max1 = rowQuantiles(weekly_deaths, prob = 0.95))
 
 
-# for (m in 1:M_regions){
-m=7
+
+for (m in 1:M_regions){
   
   plot_infection <- infection_data[(((m-1)*final_time)+1):(m*final_time),]
   plot_infection$time <- seq(from=inf_start_date ,to =  end_date, by = "day")
   
-  plot_infection <- plot_infection %>% filter(time <= as.Date("20-12-2020", format = "%d-%m-%Y"))
+  plot_infection <- plot_infection %>% filter(time >= as.Date(fitting_start,format = "%Y-%m-%d"))
   
   data_inf_95 <- data.frame(time = plot_infection$time, inf_min = plot_infection$inf_min1,
                                inf_max = plot_infection$inf_max1, key = rep("95% CI of total infection", length(plot_infection$time)))
@@ -134,7 +134,7 @@ m=7
   plot_inf_in_own <- inf_in_own_data[(((m-1)*final_time)+1):(m*final_time),]
   plot_inf_in_own$time <- seq(from=inf_start_date ,to =  end_date, by = "day")
   
-  plot_inf_in_own <- plot_inf_in_own %>% filter(time <= as.Date("20-12-2020", format = "%d-%m-%Y"))
+  plot_inf_in_own <- plot_inf_in_own %>% filter(time >= fitting_start)
   
   data_inf_in_own_95 <- data.frame(time = plot_inf_in_own$time, inf_min = plot_inf_in_own$inf_min1,
                             inf_max = plot_inf_in_own$inf_max1, key = rep("95% CI of infection in own", length(plot_inf_in_own$time)))
@@ -142,7 +142,7 @@ m=7
   plot_inf_in_mob <- inf_in_mob_data[(((m-1)*final_time)+1):(m*final_time),]
   plot_inf_in_mob$time <- seq(from=inf_start_date ,to =  end_date, by = "day")
   
-  plot_inf_in_mob <- plot_inf_in_mob %>% filter(time <= as.Date("20-12-2020", format = "%d-%m-%Y"))
+  plot_inf_in_mob <- plot_inf_in_mob %>% filter(time >= fitting_start)
   
   data_inf_in_mob_95 <- data.frame(time = plot_inf_in_mob$time, inf_min = plot_inf_in_mob$inf_min1,
                                    inf_max = plot_inf_in_mob$inf_max1, key = rep("95% CI of infection in mob", length(plot_inf_in_mob$time)))
@@ -150,7 +150,7 @@ m=7
   plot_inf_out_mob <- inf_out_mob_data[(((m-1)*final_time)+1):(m*final_time),]
   plot_inf_out_mob$time <- seq(from=inf_start_date ,to =  end_date, by = "day")
   
-  plot_inf_out_mob <- plot_inf_out_mob %>% filter(time <= as.Date("20-12-2020", format = "%d-%m-%Y"))
+  plot_inf_out_mob <- plot_inf_out_mob %>% filter(time >= fitting_start)
   
   data_inf_out_mob_95 <- data.frame(time = plot_inf_out_mob$time, inf_min = plot_inf_out_mob$inf_min1,
                                inf_max = plot_inf_out_mob$inf_max1, key = rep("95% CI of infection out mob", length(plot_inf_out_mob$time)))
@@ -166,17 +166,19 @@ data_stack_plot1 <- data.frame(
   infections = c(data_stack_plot$in_own, data_stack_plot$in_mob, data_stack_plot$out_mob)
 )
 
-ggplot(data_stack_plot1, aes(x = time, y = infections, fill = types)) +
+inf <- ggplot(data_stack_plot1, aes(x = time, y = infections, fill = types)) +
   geom_area(position = "stack") + 
-  geom_line(data = plot_infection, aes(x=time, y=inf_mean), color = "red3",inherit.aes = FALSE,linewidth=1.3)+
+  geom_line(data = plot_infection, aes(x=time, y=inf_mean,color = "fitted_infection"), inherit.aes = FALSE,linewidth=1.3)+
   geom_vline(xintercept = as.Date(c(first_lockdown_start,first_lockdown_end,second_lockdown_start,second_lockdown_end)), linetype = "dashed", color = "black", linewidth = 1)+
-  scale_x_date(date_labels = "%b %y", date_breaks = "1 month") + 
-  scale_fill_manual(values = c("in_own" = "#fdae61", "in_mob" = "#abdda4", "out_mob" = "#2c7bb6"),
+  scale_x_date(date_labels = "%b", date_breaks = "1 month") + 
+  scale_fill_manual(values = c("in_own" = "#abdda4", "in_mob" = "#fdae61", "out_mob" = "#2c7bb6"),
                     labels = c("Infections driven by \nown infections", "Mobility induced \ninfections within region", "Mobility induced infections \noutside the region") ) +
+  scale_color_manual(values = c( "fitted_infection" = "#d7191c"),
+                     labels = c("Estimated \nInfection"))+
   labs(
-    title = "Infections over time",
+    title = regions[m],
     x = "",
-    y = "Number of infections"
+    y = "",
   ) +
   theme_bw() +
   theme(axis.text.x = element_text(angle = 50,hjust = 0.4, vjust = 0.4,size = 17,color="black"),
@@ -184,39 +186,141 @@ ggplot(data_stack_plot1, aes(x = time, y = infections, fill = types)) +
         axis.title.y = element_text(size = 20, margin=margin(r=10)),
         axis.title.x = element_text(size = 20, margin=margin(r=10)),
         plot.title = element_text(size=20, margin = margin(l = 15,b=10),hjust = 0.5),
-        legend.position = "right",
+        legend.position = "bottom",
         legend.title = element_blank(),      # Increase legend title size
         legend.text = element_text(size = 15),       # Increase legend text size
         legend.key.size = unit(1.2, "cm"),
         legend.spacing.y = unit(10, "cm"))+
         
-        guides(fill=guide_legend(ncol=1))
-  
+        guides(fill=guide_legend(nrow=1))
+  assign(paste0("inf",m),inf)
+}
 
-# death data plot
-dates_2020 <- seq(from = as.Date("2020-01-01"), to = as.Date("2020-12-31"), by = "week")
-total_death_data <- data.frame(death = rowSums(death_data),time = dates_2020)
-ggplot(total_death_data, aes(x = time, y= death)) +
-  geom_bar(stat = "identity", fill = "steelblue") + 
-  geom_vline(xintercept = as.Date(c(first_lockdown_start,first_lockdown_end,second_lockdown_start,second_lockdown_end)), linetype = "dashed", color = "black", linewidth = 1)+
-    labs(
-    title = "England",
-    x = "",
-    y = "Number of weekly deaths"
-  ) +
-  theme_bw() +
-  theme(axis.text.x = element_text(angle = 50,hjust = 0.4, vjust = 0.4,size = 17,color="black"),
-        axis.text.y = element_text(size = 20,margin = margin(r=10),color="black"),
+legend_inf <- get_legend(inf)
+plot_inf_list <-  list(inf1,inf2,inf3,inf4,inf5,inf6,inf7,inf8,inf9)
+for (i in 1:length(plot_inf_list)){
+  plot_inf_list[[i]] <- plot_inf_list[[i]] + theme(legend.position = "none")
+}
+p_inf <- plot_grid(plot_grid(plotlist =  c(plot_inf_list), nrow = 3, ncol = 3,rel_widths = c(1,1,1), align = "hv",axis = "tblr"),
+                   legend_inf, nrow = 2, rel_heights = c(2.5,0.15))
+p_inf <- p_inf + theme(plot.background = element_rect(fill = "white", color = NA))
+p_inf <- ggdraw() +
+  draw_plot(p_inf, x = 0.01, y = 0, width = 0.95, height = 1) +  
+  draw_label("Number of infections",  x = 0.02, y = 0.6,  angle=90, size = 22)   # ylabel
+print(p_inf)
+
+ggsave(filename = paste0("figures/inf_in_out_region.png"), plot = p_inf, width=13, height=10, units="in")
+
+  
+#----------------  death data arrangements ------------------------------------------------------------------------------
+
+death_data <- read_excel("data/death_20_21.xlsx")  
+load("data/final_pop_2020_ltla.Rdata") 
+
+#-------- death data arrangements -------------------------------------------------------
+pop_2020$region <- sapply(pop_2020$region, function(x){
+  paste0(toupper(substring(x,1,1)),tolower(substring(x,2)))})
+
+north_east_index <- which(pop_2020$region == "North east")
+north_west_index <- which(pop_2020$region == "North west")
+yorkshire_index <- which(pop_2020$region == "Yorkshire and the humber")
+east_midlands_index <- which(pop_2020$region == "East midlands")
+west_midlands_index <- which(pop_2020$region == "West midlands")
+east_index <- which(pop_2020$region == "East")
+london_index <- which(pop_2020$region == "London")
+south_east_index <- which(pop_2020$region == "South east")
+south_west_index <- which(pop_2020$region == "South west")
+
+#-------- region wise death --------------------------------------------------------------
+
+death_data <- death_data %>% select(all_of(pop_2020$area_name))  
+
+death_regions <- data.frame('North East' = apply(death_data[,north_east_index],1,sum),
+                            'North West' = apply(death_data[,north_west_index],1,sum),
+                            "Yorkshire" = apply(death_data[,yorkshire_index],1,sum),
+                            'East Midlands' = apply(death_data[,east_midlands_index],1,sum),
+                            'West Midlands' = apply(death_data[,west_midlands_index],1,sum),
+                            "East" = apply(death_data[,east_index],1,sum),
+                            "London" = apply(death_data[,london_index],1,sum),
+                            'South East' = apply(death_data[,south_east_index],1,sum),
+                            'South West' = apply(death_data[,south_west_index],1,sum),
+                            Week = seq(ymd(20200101),ymd(20210131),by="week"))
+
+first_lockdown_start <- as.Date("2020-03-23", format = "%Y-%m-%d")
+first_lockdown_end <- as.Date("2020-05-10", format = "%Y-%m-%d")
+second_lockdown_start <- as.Date("2020-11-05", format = "%Y-%m-%d")  
+second_lockdown_end <- as.Date("2020-12-02", format = "%Y-%m-%d") 
+#---- facet plot for all the death data -------------------------------------------------------------
+death_region_long <-
+  death_regions %>%
+  pivot_longer(cols = !Week,names_to = "region", values_to = "deaths") %>%
+  mutate('Weekly deaths' = as.integer(deaths)) 
+
+death_region_long$region <- factor(death_region_long$region, 
+                                   levels = c("North.East","North.West",
+                                              "Yorkshire","East.Midlands",
+                                              "West.Midlands","East","London","South.East","South.West"))
+
+
+ggplot(data = death_region_long, aes(Week,deaths)) +
+  geom_vline(xintercept = as.Date(c(first_lockdown_start,first_lockdown_end,second_lockdown_start,second_lockdown_end)), linetype = "dashed", color = "black", linewidth = 0.8)+
+  geom_line(color = "darkblue", linewidth = 1)+
+  scale_x_date(date_labels = "%b", date_breaks = "1 month") + 
+  facet_grid(rows = vars(region))+facet_wrap(~region)+
+  theme(axis.text.x = element_text(angle = 60,hjust = 0.4, vjust = 0.4,size = 15,color="black"),
+        axis.text.y = element_text(size = 15,margin = margin(r=10),color="black"),
         axis.title.y = element_text(size = 20, margin=margin(r=10)),
         axis.title.x = element_text(size = 20, margin=margin(r=10)),
         plot.title = element_text(size=20, margin = margin(l = 15,b=10),hjust = 0.5),
-        legend.position = "right",
+        legend.position = "",
         legend.title = element_blank(),      # Increase legend title size
         legend.text = element_text(size = 15),       # Increase legend text size
         legend.key.size = unit(1.2, "cm"),
         legend.spacing.y = unit(10, "cm"))+
-  
-  guides(fill=guide_legend(ncol=1))
+        guides(fill=guide_legend())
+
+#------------------------------------------------------------------------------------------------
+pop_2020$region <- sapply(pop_2020$region, function(x){
+  paste0(toupper(substring(x,1,1)),tolower(substring(x,2)))})
+
+pop_2020$area_name <- sapply(pop_2020$area_name, function(x){
+  paste0(toupper(substring(x,1,1)),tolower(substring(x,2)))})
+
+colnames(death_data) <- sapply(colnames(death_data), function(x){
+  paste0(toupper(substring(x,1,1)),tolower(substring(x,2)))})
+
+death_north_east <- death_data %>% select(all_of(pop_2020$area_name[pop_2020$region == "North east"]))  
+death_north_east <- death_north_east %>% mutate(Week = seq(ymd(20200101),ymd(20210131),by="week"))
+
+#---- facet plot for all the death data -------------------------------------------------------------
+ne_death_region_long <-
+  death_north_east %>%
+  pivot_longer(cols = !Week,names_to = "region", values_to = "deaths") %>%
+  mutate('Weekly deaths' = as.integer(deaths)) 
+
+ne_death_region_long$region <- factor(ne_death_region_long$region, 
+                                   levels = c("Hartlepool","Middlesbrough","Redcar and Cleveland","Stockton-on-Tees","Darlington","County Durham","Northumberland",
+                                              "Gateshead","Newcastle upon Tyne","North Tyneside","South Tyneside","Sunderland"))
+
+p <- ggplot(data = ne_death_region_long, aes(Week,deaths)) +
+  geom_vline(xintercept = as.Date(c(first_lockdown_start,first_lockdown_end,second_lockdown_start,second_lockdown_end)), linetype = "dashed", color = "black", linewidth = 0.8)+
+  geom_line(color = "darkblue", linewidth = 1)+
+  scale_x_date(date_labels = "%b", date_breaks = "1 month") + 
+  facet_grid(rows = vars(region))+facet_wrap(~region, ncol=3,nrow=4)+
+  theme(axis.text.x = element_text(angle = 60,hjust = 0.4, vjust = 0.4,size = 15,color="black"),
+        axis.text.y = element_text(size = 15,margin = margin(r=10),color="black"),
+        axis.title.y = element_text(size = 20, margin=margin(r=10)),
+        axis.title.x = element_text(size = 20, margin=margin(r=10)),
+        plot.title = element_text(size=20, margin = margin(l = 15,b=10),hjust = 0.5),
+        legend.position = "",
+        legend.title = element_blank(),      # Increase legend title size
+        legend.text = element_text(size = 15),       # Increase legend text size
+        legend.key.size = unit(1.2, "cm"),
+        legend.spacing.y = unit(10, "cm"))+
+        guides(fill=guide_legend())
+
+ggsave(filename = paste0("figures/ne_death.png"), plot = p, width=13, height=10, units="in")
+#----------------------------------------------------------------------------------------------------------
   
 #   colors_infection <- c("Total infection" = "red4", "Infections driven by \nlocal infections" = "green4", "Mobility induced \ninfections within region"="coral3", "Mobility induced \ninfections outside region" = "blue4")
 #   
@@ -254,7 +358,7 @@ ggplot(total_death_data, aes(x = time, y= death)) +
 #   assign(paste0("inf",m),plot_inf)
 # }
 # 
-# legend_inf <- get_legend(plot_inf) 
+# legend_inf <- get_legend(plot_inf)
 # plot_inf_list <-  list(inf1,inf2,inf3,inf4,inf5,inf6,inf7,inf8,inf9)
 # for (i in 1:length(plot_inf_list)){
 #   plot_inf_list[[i]] <- plot_inf_list[[i]] + theme(legend.position = "none")
