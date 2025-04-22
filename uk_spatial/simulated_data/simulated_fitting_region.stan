@@ -43,6 +43,9 @@ transformed parameters{
   matrix[N, M_regions] infection = rep_matrix(0, N, M_regions);    // daily initialization
   matrix[N , M_regions] SI_regions = rep_matrix(SI_rev,M_regions);  // serial interval for every region
   array[N, M_regions] real<lower=0> Rt = geometric_random_walk(M_regions,N,init_R, rw_noise, rw_sd);
+  // matrix[final_time, M_regions] infection_in_own = rep_matrix(0, N, M_regions);
+  // matrix[final_time, M_regions] infection_in_mob = rep_matrix(0, N, M_regions);
+  // matrix[final_time, M_regions] infection_out_mob = rep_matrix(0, N, M_regions);
   
    
     for (m in 1:M_regions){                  // for initial seeding
@@ -65,7 +68,17 @@ transformed parameters{
       }
       // print(RR);
       infection[t,m] = dot_product(C[:,m]', (((rep_vector(sus , M_regions) ./ eff_pop)' .* RR).* total_inf'));  
-     
+      // infection_in_own[t,m] = (sus * C[m,m] / eff_pop[m]) * Rt[t,m] * (C[m,m] * convolution_inf[m]) ;
+      // infection_in_mob[t,m] = (sus * C[m,m] / eff_pop[m]) * Rt[t,m] * (total_inf[m] - (C[m,m] * convolution_inf[m])) ;
+      // array[M_regions-1] int index; 
+      // int ind = 1;
+      // for (n  in 1:M_regions){
+      //   if (n != m){
+      //     index[ind] = n;
+      //     ind += 1;
+      //   }
+      // }
+      // infection_out_mob[t,m] = dot_product(C[index,m]', (((rep_vector(sus , M_regions-1) ./ eff_pop[index])' .* Rt[t,index]).* total_inf[index]'));
     }
   }
 }
@@ -81,20 +94,11 @@ model {
  }
 
  rw_sd ~ normal(0, 0.05) T[0,];
- // for (m in 1:M_regions){
- //   for (i in 1:initial_seeding_day){
- //      Rt[i,m] ~ normal(2,1) ;
- //   }
- // for (i in initial_seeding_day:final_time){
- //   Rt[i,m] ~ normal(Rt[i-1,m],0.3) ;
- //   }
- // }
-   for (t in fitting_start:final_time){
+   // for (t in fitting_start:final_time){
      for (m in 1:M_regions){
-       // data_inf[t, m] ~ poisson(infection[t, m]);
-     target +=  neg_binomial_2_lpmf(data_inf[t, m]| infection[t, m], phi1);
+     data_inf[fitting_start:final_time, m] ~ neg_binomial_2( infection[fitting_start:final_time, m], phi1);
     }
-  }
+  // }
 }
 
 // generated quantities{
@@ -107,3 +111,11 @@ model {
 //     }
 //   }
 // }
+generated quantities {
+  array[final_time,M_regions] real log_lik;
+  for (n in 1:final_time) {
+    for (m in 1:M_regions){
+      log_lik[n,m] = neg_binomial_2_lpmf(data_inf[n,m] | infection[n, m], phi1);
+    }
+  }
+}

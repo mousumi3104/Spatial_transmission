@@ -1,4 +1,4 @@
-# the estimated infection at own region and at different regions due to the mobility
+# the estimated infection from three different sources (supp Fig E, F)
 library(cmdstanr)
 library(data.table)
 library(lubridate)
@@ -23,12 +23,13 @@ setwd(script_directory)
 
 # this is only for Rt and infection plot 
 
-load("results/region_connected_rt.Rdata")
+load("results/updated_si/gm_region_connected_rt_jan.Rdata")
 load("data/final_pop_2020_ltla.Rdata")
 
 inf_start_date <- plot_required_date$inf_start_date     #as.Date("27-01-2020",format = "%d-%m-%Y")
 fitting_start <- plot_required_date$fitting_start_date      #as.Date("09-03-2020", format = "%d-%m-%Y")
 end_date <- plot_required_date$end_date                 #as.Date("31-12-2020", format = "%d-%m-%Y")
+plot_end <- ymd("2020-12-31")
 
 first_lockdown_start <- as.Date("2020-03-23", format = "%Y-%m-%d")
 first_lockdown_end <- as.Date("2020-05-10", format = "%Y-%m-%d")
@@ -57,17 +58,18 @@ final_time <- stan_data_connected$final_time
 M_regions <- stan_data_connected$M_regions 
 
 # ------------- stan data arrange-------------------------------------------------------------
-no_sample <- 200
+no_sample <- 500
 infection <- array(data = NA, dim = c(final_time*M_regions, no_sample))
 infection_in_own <- array(data = NA, dim = c(final_time*M_regions, no_sample))
 infection_in_mob <- array(data = NA, dim = c(final_time*M_regions, no_sample))
 infection_out_mob <- array(data = NA, dim = c(final_time*M_regions, no_sample))
-weekly_deaths <- array(data = NA, dim = c(ceiling(final_time/7)*M_regions, no_sample))
+# weekly_deaths <- array(data = NA, dim = c(ceiling(final_time/7)*M_regions, no_sample))
 
 m <- cmdstan_model("uk_region_simulation.stan")  
-ind <- sample(1:800,no_sample)
+ind <- sample(1:nrow(Rt_connected),no_sample)
 
 for (k in 1:no_sample){ 
+  print(k)
     stan_data <- list(M_regions = stan_data_connected$M_regions,
                       final_time = stan_data_connected$final_time,
                       W = stan_data_connected$W,
@@ -93,7 +95,7 @@ for (k in 1:no_sample){
     infection_in_own[,k] <- as.matrix(simulated_data$draws("infection_in_own"))
     infection_in_mob[,k] <- as.matrix(simulated_data$draws("infection_in_mob"))
     infection_out_mob[,k] <- as.matrix(simulated_data$draws("infection_out_mob"))
-    weekly_deaths[,k] <- as.matrix(simulated_data$draws("weekly_deaths"))
+    # weekly_deaths[,k] <- as.matrix(simulated_data$draws("weekly_deaths"))
 }
 
 
@@ -115,18 +117,20 @@ inf_out_mob_data <- data.frame(inf_mean = rowMeans(infection_out_mob),
                              inf_min1 = rowQuantiles(infection_out_mob,prob = 0.05),
                              inf_max1 = rowQuantiles(infection_out_mob,prob = 0.95))
 
-death_data <- data.frame(death_mean = rowMeans(weekly_deaths),
-                         death_min1 = rowQuantiles(weekly_deaths, prob = 0.05),
-                         death_max1 = rowQuantiles(weekly_deaths, prob = 0.95))
+# death_data <- data.frame(death_mean = rowMeans(weekly_deaths),
+#                          death_min1 = rowQuantiles(weekly_deaths, prob = 0.05),
+#                          death_max1 = rowQuantiles(weekly_deaths, prob = 0.95))
 
 
+plot_prop_list = list()
+plot_inf_list = list()
 
 for (m in 1:M_regions){
   
   plot_infection <- infection_data[(((m-1)*final_time)+1):(m*final_time),]
   plot_infection$time <- seq(from=inf_start_date ,to =  end_date, by = "day")
   
-  plot_infection <- plot_infection %>% filter(time >= as.Date(fitting_start,format = "%Y-%m-%d"))
+  plot_infection <- plot_infection %>% filter(time >= as.Date(fitting_start,format = "%Y-%m-%d") & time <= plot_end)
   
   data_inf_95 <- data.frame(time = plot_infection$time, inf_min = plot_infection$inf_min1,
                                inf_max = plot_infection$inf_max1, key = rep("95% CI of total infection", length(plot_infection$time)))
@@ -134,7 +138,7 @@ for (m in 1:M_regions){
   plot_inf_in_own <- inf_in_own_data[(((m-1)*final_time)+1):(m*final_time),]
   plot_inf_in_own$time <- seq(from=inf_start_date ,to =  end_date, by = "day")
   
-  plot_inf_in_own <- plot_inf_in_own %>% filter(time >= fitting_start)
+  plot_inf_in_own <- plot_inf_in_own %>% filter(time >= fitting_start & time <= plot_end)
   
   data_inf_in_own_95 <- data.frame(time = plot_inf_in_own$time, inf_min = plot_inf_in_own$inf_min1,
                             inf_max = plot_inf_in_own$inf_max1, key = rep("95% CI of infection in own", length(plot_inf_in_own$time)))
@@ -142,7 +146,7 @@ for (m in 1:M_regions){
   plot_inf_in_mob <- inf_in_mob_data[(((m-1)*final_time)+1):(m*final_time),]
   plot_inf_in_mob$time <- seq(from=inf_start_date ,to =  end_date, by = "day")
   
-  plot_inf_in_mob <- plot_inf_in_mob %>% filter(time >= fitting_start)
+  plot_inf_in_mob <- plot_inf_in_mob %>% filter(time >= fitting_start & time <= plot_end)
   
   data_inf_in_mob_95 <- data.frame(time = plot_inf_in_mob$time, inf_min = plot_inf_in_mob$inf_min1,
                                    inf_max = plot_inf_in_mob$inf_max1, key = rep("95% CI of infection in mob", length(plot_inf_in_mob$time)))
@@ -150,7 +154,7 @@ for (m in 1:M_regions){
   plot_inf_out_mob <- inf_out_mob_data[(((m-1)*final_time)+1):(m*final_time),]
   plot_inf_out_mob$time <- seq(from=inf_start_date ,to =  end_date, by = "day")
   
-  plot_inf_out_mob <- plot_inf_out_mob %>% filter(time >= fitting_start)
+  plot_inf_out_mob <- plot_inf_out_mob %>% filter(time >= fitting_start & time <= plot_end)
   
   data_inf_out_mob_95 <- data.frame(time = plot_inf_out_mob$time, inf_min = plot_inf_out_mob$inf_min1,
                                inf_max = plot_inf_out_mob$inf_max1, key = rep("95% CI of infection out mob", length(plot_inf_out_mob$time)))
@@ -160,59 +164,170 @@ for (m in 1:M_regions){
   
 data_stack_plot <-  data.frame(in_mob = plot_inf_in_mob$inf_mean, in_own = plot_inf_in_own$inf_mean, out_mob = plot_inf_out_mob$inf_mean, time = plot_inf_in_mob$time)
 
+#-------------------------------------------------------------------------------------------------------------------------
+#_______ plot stack plot of three types of infections over time___________________________________________________________
+#-------------------------------------------------------------------------------------------------------------------------
+plot_start <- fitting_start#ymd("20200301")
+plot_end <- as.Date("2021-1-1", format = "%Y-%m-%d")
+
 data_stack_plot1 <- data.frame(
   time = rep(data_stack_plot$time, times = 3),
   types = factor(rep(c("in_own", "in_mob", "out_mob"), each = length(data_stack_plot$time)),levels = c("in_own", "in_mob", "out_mob")),
   infections = c(data_stack_plot$in_own, data_stack_plot$in_mob, data_stack_plot$out_mob)
 )
+#--- plot starts -------------------------------------------------------------------------------------------------------
 
-inf <- ggplot(data_stack_plot1, aes(x = time, y = infections, fill = types)) +
-  geom_area(position = "stack") + 
-  geom_line(data = plot_infection, aes(x=time, y=inf_mean,color = "fitted_infection"), inherit.aes = FALSE,linewidth=1.3)+
-  geom_vline(xintercept = as.Date(c(first_lockdown_start,first_lockdown_end,second_lockdown_start,second_lockdown_end)), linetype = "dashed", color = "black", linewidth = 1)+
-  scale_x_date(date_labels = "%b", date_breaks = "1 month") + 
-  scale_fill_manual(values = c("in_own" = "#abdda4", "in_mob" = "#fdae61", "out_mob" = "#2c7bb6"),
-                    labels = c("Infections driven by \nown infections", "Mobility induced \ninfections within region", "Mobility induced infections \noutside the region") ) +
-  scale_color_manual(values = c( "fitted_infection" = "#d7191c"),
-                     labels = c("Estimated \nInfection"))+
+breaks <- sort(c(seq(ymd("2020-4-1"),ymd("2020-12-31"),by="months"),seq(ymd("2020-3-15"),ymd("2020-12-31"),by="months"),ymd("2021-1-1")))
+labels = unique(date_format("%b")(plot_infection$time))
+labels = as.vector(rbind(labels,rep("",length(labels))))
+
+breaks = sort(c(seq(ymd("20200101"),ymd("20210101"),by="months"),seq(ymd("2020-1-15"),ymd("2020-12-15"),by="months")))
+labels = unique(date_format("%b")(sort(c(seq(ymd("20200101"),ymd("20210101"),by="months"),seq(ymd("2020-1-15"),ymd("20210131"),by="months")))))
+labels = c(as.vector(rbind(rep("",length(labels)),labels)),"")
+
+p <- ggplot(data_stack_plot1, aes(x = time, y = infections, fill = types)) +
+  geom_area(position = "stack") +
+  geom_ribbon(data = data_inf_out_mob_95, aes(x = time, ymin = inf_min, ymax = inf_max), fill = "#7570b3", alpha = 0.5, inherit.aes = FALSE) +
+  geom_ribbon(data = data_inf_in_mob_95, aes(x = time, ymin = plot_inf_out_mob$inf_mean  + inf_min, ymax = plot_inf_out_mob$inf_mean + inf_max), fill = "deepskyblue4", alpha = 0.5, inherit.aes = FALSE) +
+  geom_ribbon(data = data_inf_in_own_95, aes(x = time, ymin = plot_inf_out_mob$inf_mean  + plot_inf_in_mob$inf_mean + inf_min, ymax = plot_inf_out_mob$inf_mean  + plot_inf_in_mob$inf_mean + inf_max), fill = "#ff7f00", alpha = 0.5, inherit.aes = FALSE) +
+  geom_line(data = plot_inf_out_mob, aes(x = time, y = inf_mean),color = "#7570b3",inherit.aes = FALSE, linewidth = 1)+
+  geom_line(data = plot_inf_in_mob, aes(x = time, y = plot_inf_out_mob$inf_mean  + inf_mean),color = "deepskyblue4",inherit.aes = FALSE,linewidth = 1)+
+  geom_line(data = plot_inf_in_own, aes(x = time, y = plot_inf_out_mob$inf_mean  + plot_inf_in_mob$inf_mean +inf_mean),color = "#ff7f00",inherit.aes = FALSE, linewidth = 1)+
+  geom_vline(xintercept = as.Date(c(first_lockdown_start,first_lockdown_end, second_lockdown_start,second_lockdown_end)), linetype = "dotted", color = "grey30", linewidth = 1)+
+  scale_fill_manual(values = c("in_own" = alpha("#ff7f00",0.3), "in_mob" = alpha("deepskyblue4",0.3), "out_mob" = alpha("#7570b3",0.3)),
+                    labels = c(TeX(r"(\overset{\normalsize{Infections driven by}}{\normalsize{own infected population}})"),
+                               TeX(r"(\overset{\normalsize{Mobility induced}}{\normalsize{infections within region}})") ,
+                               TeX(r"(\overset{\normalsize{Mobility induced infections}}{\normalsize{outside the region}})"))) +
   labs(
-    title = regions[m],
+    title = regions[m],    #sprintf("Region %d",m),
     x = "",
-    y = "",
+    y = ""
   ) +
+  scale_x_date(labels = labels, breaks=breaks, limits = c(plot_start, plot_end)) +
   theme_bw() +
-  theme(axis.text.x = element_text(angle = 50,hjust = 0.4, vjust = 0.4,size = 17,color="black"),
-        axis.text.y = element_text(size = 20,margin = margin(r=10),color="black"),
-        axis.title.y = element_text(size = 20, margin=margin(r=10)),
-        axis.title.x = element_text(size = 20, margin=margin(r=10)),
-        plot.title = element_text(size=20, margin = margin(l = 15,b=10),hjust = 0.5),
+  theme(axis.text.x = element_text(angle = 90,hjust = 0.4, vjust = 0.4,size = 17,color="black"),
+        axis.text.y = element_text(size = 25,margin = margin(r=10),color="black"),
+        axis.title.y = element_text(size = 25, margin=margin(r=10)),
+        axis.title.x = element_text(size = 25, margin=margin(t=10)),
+        plot.title = element_text(size=22, margin = margin(l = 15,b=10),hjust = 0.5),
+        axis.ticks.x= element_line(colour=c(rep(c("black",NA), t=floor(length(labels)/2)))),
+        axis.ticks.length = unit(0.3,"cm"),
+        axis.ticks=element_line(linewidth =1),
+        panel.grid.major.x=element_line(colour=c(rep(c( "grey94",NA), t=floor(length(labels)/2)))),
+        panel.grid.minor=element_blank(),
+        panel.border = element_rect(color = "black", linewidth=1.5),
         legend.position = "bottom",
+        plot.margin = margin(1,12,1,1),
         legend.title = element_blank(),      # Increase legend title size
-        legend.text = element_text(size = 15),       # Increase legend text size
+        legend.text = element_text(size = 22),       # Increase legend text size
         legend.key.size = unit(1.2, "cm"),
         legend.spacing.y = unit(10, "cm"))+
-        
-        guides(fill=guide_legend(nrow=1))
-  assign(paste0("inf",m),inf)
+  guides(fill=guide_legend(nrow=1))
+
+legend_inf <- get_legend(p)
+p<- p+theme(legend.position = "none")
+assign(paste0("region",m),p)
+plot_inf_list[[m]] <- ggplotGrob(p)
+
+#-------------- plot proportion --------------------------------------------------------------------------------------------------
+data_stack_plot$in_mob_prop = data_stack_plot$in_mob / (data_stack_plot$in_mob + data_stack_plot$in_own + data_stack_plot$out_mob)
+data_stack_plot$in_own_prop = data_stack_plot$in_own / (data_stack_plot$in_mob + data_stack_plot$in_own + data_stack_plot$out_mob)
+data_stack_plot$out_mob_prop = data_stack_plot$out_mob / (data_stack_plot$in_mob + data_stack_plot$in_own + data_stack_plot$out_mob)
+
+data_stack_plot <- lapply(data_stack_plot, function(df) {
+  df[is.nan(df)] <- 0
+  return(df)
+})
+
+data_stack_plot1 <- 
+  data.frame(
+    time = rep(data_stack_plot$time, times = 3),
+    types = factor(rep(c("in_own_prop", "in_mob_prop", "out_mob_prop"), each = length(data_stack_plot$time)),levels = c("in_own_prop", "in_mob_prop", "out_mob_prop")),
+    infections = c(data_stack_plot$in_own_prop, data_stack_plot$in_mob_prop, data_stack_plot$out_mob_prop)
+  )
+
+p_prop  <- ggplot(data_stack_plot1, aes(x = time, y = infections, fill = types)) +
+  geom_area(position = "stack") +
+  scale_fill_manual(values = c("in_own_prop" = alpha("#ff7f00",0.45), "in_mob_prop" = alpha("deepskyblue4",0.45), "out_mob_prop" = alpha("#7570b3",0.45))) +
+  geom_vline(xintercept = as.Date(c(first_lockdown_start,first_lockdown_end, second_lockdown_start,second_lockdown_end)), linetype = "dotted", color = "grey30", linewidth = 1)+
+  labs(
+    title = regions[m], 
+    x = "",
+    y = ""
+  ) +
+  scale_x_date(labels = labels, breaks=breaks, limits = c(plot_start, plot_end)) +
+  theme_bw() + scale_y_continuous(labels = scales::percent)+
+  theme(axis.text.x = element_text(angle = 90,hjust = 0.4, vjust = 0.4,size = 17,color="black"),
+        axis.text.y = element_text(size = 25,margin = margin(r=10),color="black"),
+        axis.title.y = element_text(size = 25, margin=margin(r=10)),
+        axis.title.x = element_text(size = 25, margin=margin(r=10)),
+        plot.title = element_text(size=22, margin = margin(l = 15,b=10),hjust = 0.2),
+        axis.ticks.x= element_line(colour=c(rep(c("black",NA), t=floor(length(labels)/2)))),
+        axis.ticks.length = unit(0.3,"cm"),
+        axis.ticks = element_line(linewidth =1),
+        panel.grid.major.x=element_line(colour=c(rep(c( "grey94",NA), t=floor(length(labels)/2)))),
+        panel.grid.minor = element_blank(),
+        panel.border = element_rect(color = "black", linewidth = 1.5),
+        legend.position = "right",
+        legend.title = element_blank(),      # Increase legend title size
+        legend.text = element_text(size = 22),       # Increase legend text size
+        legend.key.size = unit(2, "cm"))+
+  guides(fill=guide_legend(nrow=1))
+p_prop<- p_prop+theme(legend.position = "none")
+print(p_prop)
+plot_prop_list[[m]] <- ggplotGrob(p_prop)
 }
 
-legend_inf <- get_legend(inf)
-plot_inf_list <-  list(inf1,inf2,inf3,inf4,inf5,inf6,inf7,inf8,inf9)
-for (i in 1:length(plot_inf_list)){
-  plot_inf_list[[i]] <- plot_inf_list[[i]] + theme(legend.position = "none")
-}
-p_inf <- plot_grid(plot_grid(plotlist =  c(plot_inf_list), nrow = 3, ncol = 3,rel_widths = c(1,1,1), align = "hv",axis = "tblr"),
-                   legend_inf, nrow = 2, rel_heights = c(2.5,0.15))
-p_inf <- p_inf + theme(plot.background = element_rect(fill = "white", color = NA))
+#---- arrange individual plots --------------------------------------------------------------------
+# absolute sources
+for (i in 1:M_regions) {plot_inf_list[[i]] <- as.ggplot(plot_inf_list[[i]])}
+
+index = c("(a)","(b)","(c)","(d)","(e)","(f)","(g)","(h)","(i)")
+
 p_inf <- ggdraw() +
-  draw_plot(p_inf, x = 0.01, y = 0, width = 0.95, height = 1) +  
-  draw_label("Number of infections",  x = 0.02, y = 0.6,  angle=90, size = 22)   # ylabel
-print(p_inf)
+  draw_plot(plot_grid(plot_grid(plotlist = plot_inf_list,  nrow = 3, ncol = 3,rel_heights = c(1,1,1,1), rel_widths = c(1,1,1), align = "hv",axis = "tblr",
+                                labels = index,
+                                label_size = 20,
+                                label_x = 0.2,
+                                label_y = 1.01),
+                      legend_inf, nrow=2, rel_heights = c(2.5,0.09)),x = 0.02, y = 0, width = 0.95, height = 1)+
+  draw_label("Daily number of infections", x = 0.02, y = 0.6, angle = 90, size = 25)
 
-ggsave(filename = paste0("figures/inf_in_out_region.png"), plot = p_inf, width=13, height=10, units="in")
+p_final <- ggdraw() +
+  draw_plot(p_inf, x = 0, y = 0.03, width = 1, height = 0.968)
 
-  
+p_final <- p_final + theme(plot.background = element_rect(fill = "white", color = NA))
+
+print(p_final)  
+ggsave(filename = paste0("figures/updated_si/inf_in_out_region_jan.png"), plot = p_final, width=16, height=12, units="in")
+
+#proportion-------
+
+for (i in 1:M_regions) {plot_prop_list[[i]] <- as.ggplot(plot_prop_list[[i]])}
+
+index = c("(a)","(b)","(c)","(d)","(e)","(f)","(g)","(h)","(i)")
+
+p_prop <- ggdraw() +
+  draw_plot(plot_grid(plot_grid(plotlist = plot_prop_list,  nrow = 3, ncol = 3,rel_heights = c(1,1,1,1), rel_widths = c(1,1,1), align = "hv",axis = "tblr",
+                                labels = index,
+                                label_size = 20,
+                                label_x = 0.25,
+                                label_y = 1.01),
+                      legend_inf, nrow=2, rel_heights = c(2.5,0.09)),x = 0.02, y = 0, width = 0.95, height = 1)+
+  draw_label("Proportion of daily infections", x = 0.025, y = 0.6, angle = 90, size = 25)
+
+p_final <- ggdraw() +
+  draw_plot(p_prop, x = 0, y = 0.03, width = 1, height = 0.968)
+
+p_final <- p_final + theme(plot.background = element_rect(fill = "white", color = NA))
+
+print(p_final)  
+ggsave(filename = paste0("figures/updated_si/prop_in_out_region_jan.png"), plot = p_final, width=15, height=12, units="in")
+
+
+#-----------------------------------------------------------------------------------------------------------------------  
 #----------------  death data arrangements ------------------------------------------------------------------------------
+#-----------------------------------------------------------------------------------------------------------------------  
 
 death_data <- read_excel("data/death_20_21.xlsx")  
 load("data/final_pop_2020_ltla.Rdata") 
@@ -322,54 +437,3 @@ p <- ggplot(data = ne_death_region_long, aes(Week,deaths)) +
 ggsave(filename = paste0("figures/ne_death.png"), plot = p, width=13, height=10, units="in")
 #----------------------------------------------------------------------------------------------------------
   
-#   colors_infection <- c("Total infection" = "red4", "Infections driven by \nlocal infections" = "green4", "Mobility induced \ninfections within region"="coral3", "Mobility induced \ninfections outside region" = "blue4")
-#   
-#   plot_inf <- ggplot(data_inf)+
-#     geom_ribbon(aes(x = time, ymin = inf_min, ymax = inf_max, fill = key), alpha =0.25,show.legend = FALSE)+
-#     geom_line(data = plot_infection, aes(x = time, y = inf_mean, color = "Total infection"), linewidth = 1.3)+
-#     geom_line(data = plot_inf_in_own, aes(x = time, y = inf_mean, color = "Infections driven by \nlocal infections"), linewidth = 1.3)+
-#     geom_line(data = plot_inf_in_mob, aes(x = time, y = inf_mean, color = "Mobility induced \ninfections within region"), linewidth = 1.3)+
-#     geom_line(data = plot_inf_out_mob, aes(x = time, y = inf_mean, color = "Mobility induced \ninfections outside region"), linewidth = 1.3)+
-#     geom_vline(xintercept = as.Date(c(first_lockdown_start,first_lockdown_end,second_lockdown_start,second_lockdown_end)), linetype = "dashed", color = "black", linewidth = 1)+
-#     
-#     xlab("")+
-#     ylab("Daily infection")+
-#     # scale_fill_manual(name = "",
-#     #                   values = c("95% CI of total infection" = alpha("red4", 0.25),
-#     #                              "95% CI of infection in own" = alpha("green4", 0.25),
-#     #                              "95% CI of infection in mob" = alpha("coral3", 0.25),
-#     #                              "95% CI of infection out mob" = alpha("blue4", 0.25))) +
-#     scale_color_manual(values = colors_infection)+
-#     scale_x_date(date_labels = "%b %y", date_breaks = "1 month") + 
-#     ggtitle(regions[m])+
-#     theme_bw()+
-#     theme(axis.text.x = element_text(angle = 50,hjust = 0.4, vjust = 0.4,size = 17,color="black"),
-#           axis.text.y = element_text(size = 20,margin = margin(r=10),color="black"),
-#           axis.title.y = element_text(size = 20, margin=margin(r=10)),
-#           axis.title.x = element_text(size = 20, margin=margin(r=10)),
-#           plot.title = element_text(size=20, margin = margin(l = 15,b=10),hjust = 0.5),
-#           legend.position = "right",
-#           legend.title = element_blank(),      # Increase legend title size
-#           legend.text = element_text(size = 20),       # Increase legend text size
-#           legend.key.size = unit(1.2, "cm"),
-#           legend.spacing.y = unit(10, "cm"))+
-#     guides(fill=guide_legend(ncol=1))
-#   
-#   assign(paste0("inf",m),plot_inf)
-# }
-# 
-# legend_inf <- get_legend(plot_inf)
-# plot_inf_list <-  list(inf1,inf2,inf3,inf4,inf5,inf6,inf7,inf8,inf9)
-# for (i in 1:length(plot_inf_list)){
-#   plot_inf_list[[i]] <- plot_inf_list[[i]] + theme(legend.position = "none")
-# }
-# p_inf <- plot_grid(do.call(plot_grid, c(plot_inf_list, nrow = 3, ncol = 3)), legend_inf, nrow = 1, rel_widths = c(4,1))
-# p_inf <- p_inf + theme(plot.background = element_rect(fill = "white", color = NA))
-# print(p_inf)
-# 
-# # ggsave(filename = paste0("figures/inf_due_mob_london.png"), plot = inf7, width=12, height=5, units="in")
-# 
-# 
-# 
-# 
-# 

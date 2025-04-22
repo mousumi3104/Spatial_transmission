@@ -89,6 +89,6 @@ generated quantities{
      for (t in 1:(final_time %/% 7)) { //weekly_deaths
         weekly_deaths[t,m] = sum(daily_deaths[(7*(t-1)+1):7*t,m]);
     }
-    weekly_deaths[(final_time %/% 7)+1,m] = sum(daily_deaths[(7*(final_time %/% 7)+1) : final_time,m]);
+    // weekly_deaths[(final_time %/% 7)+1,m] = sum(daily_deaths[(7*(final_time %/% 7)+1) : final_time,m]);
   }
 }

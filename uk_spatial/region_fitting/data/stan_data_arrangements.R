@@ -52,7 +52,7 @@ epidemic_start <- fitting_death_start - infection_gen_time
 inf_start_date <- ISOweek2date(paste0(2020, "-W", sprintf("%02d", epidemic_start), "-1"))
 fitting_start_date <- ISOweek2date(paste0(2020, "-W", sprintf("%02d", fitting_death_start), "-1"))
 inf_end_date <- as.Date("31-01-2021",format = "%d-%m-%Y")
-# week_dates <- seq.Date(inf_start_date, inf_end_date, by = "week")
+week_dates <- seq.Date(inf_start_date, inf_end_date, by = "week")
 final_time <- as.numeric(inf_end_date - inf_start_date) +1
 
 #-----------------------------------------------------------------------------------------------
@@ -85,8 +85,8 @@ C_base <- mobmatrix_region_norm   # mobility matrix
 # diag(C_base) <- 1 - (colSums(C_base) - diag(C_base))
 
 
-C_lockdown <- matrix(0.0001,M_regions,M_regions)
-diag(C_lockdown) <- 0.9992
+C_lockdown <- matrix(0.00001,M_regions,M_regions)
+diag(C_lockdown) <- 0.99992
 
 # C_lockdown <- diag(M_regions)
 

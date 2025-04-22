@@ -33,20 +33,22 @@ transformed data {
 
 parameters {
   array[M_regions] real<lower=0> mu;      //parameters for Rt
-  // real<lower = 0> kappa;
   array[M_regions] real<lower=1> initial_seeding;
   real<lower=0> tau;
   real<lower=0> weekly_var;       //weekly variance
   matrix[W, M_regions] weekly_effect_d;     //parameters for Rt (why W+1).     ?????
   real<lower=0> phi1;
   array[M_regions] real<lower=0> ifr_noise;
-  real<lower = 0> gamma;
-  vector[M_regions] x1;
-  vector[M_regions] y1;
-  vector[M_regions] z1;
-  // vector[M_regions] x2;
-  // vector[M_regions] y2;
-  // vector[M_regions] z2;
+  
+  real<lower = 0> gamma1;
+  real<lower = 0> gamma2;
+  real<lower = 0> gamma3;
+
+  vector[M_regions] eta1;
+  vector[M_regions] eta2;
+  vector[M_regions] eta3;
+  // vector[M_regions] y1;
+  // vector[M_regions] z1;
 }
 
 transformed parameters{
@@ -56,6 +58,9 @@ transformed parameters{
    matrix[death_data_length, M_regions] weekly_deaths;
    matrix[W,M_regions] weekly_effect;   // check why this +1 is needed
    matrix[ final_time, M_regions] Rt;   //reproduction number
+   vector[M_regions] x1;
+   vector[M_regions] y1;
+   vector[M_regions] z1;
     
    //-------------------------------------------------------------------------------------------------//
    
@@ -68,6 +73,11 @@ transformed parameters{
       Rt[1:initial_seeding_day, m] = rep_vector(mu[m] * 2 * inv_logit(- weekly_effect[1, m]) , initial_seeding_day);
     }
    for (m in 1:M_regions){
+     
+      x1[m] = 0 + gamma1 * eta1[m];
+      y1[m] = 0 + gamma2 * eta2[m];
+      z1[m] = 0 + gamma3 * eta3[m];
+      
       for (t in (initial_seeding_day+1):final_time){
           Rt[t,m] = mu[m] * 2 * inv_logit(- weekly_effect[day_week_index[t], m]
                                      - (x1[m] * gm_non_res[t,m] * I[t,2])// - (x2[m] * gm_res[t,m] * I[t,2])
@@ -110,19 +120,17 @@ model {
  phi1 ~ normal(0,5);
  tau ~ exponential(0.01);
  weekly_var ~ normal(0,.2);
- // kappa ~ normal(0,0.5);
  mu ~ normal(3.28,0.5);
  initial_seeding ~ exponential(1/tau);
  to_vector(ifr_noise) ~ normal(1,0.1);
- gamma ~ normal(0,0.5);
- 
- x1 ~ normal(0, gamma);
- y1 ~ normal(0, gamma);
- z1 ~ normal(0, gamma);
- // x2 ~ normal(0, gamma);
- // y2 ~ normal(0, gamma);
- // z2 ~ normal(0, gamma);
- 
+ gamma1 ~ normal(0,0.5);
+ gamma2 ~ normal(0,0.5);
+ gamma3 ~ normal(0,0.5);
+ // 
+ eta1 ~ normal(0, 1);
+ eta2 ~ normal(0, 1);
+ eta3 ~ normal(0, 1);
+
  to_vector(weekly_effect_d) ~ normal(0, 1);
  
   for (t in fitting_death_start:death_data_length){
@@ -131,3 +139,14 @@ model {
     //}
   }
 }
+
+generated quantities {
+  array[death_data_length - fitting_death_start ,M_regions] real log_lik;
+  for (n in 1 : (death_data_length - fitting_death_start)) {
+    for (m in 1:M_regions){
+      log_lik[n,m] = neg_binomial_2_lpmf(death[n + fitting_death_start , m] | weekly_deaths[n +fitting_death_start, m], phi1);
+    }
+  }
+}
+
+
